@@ -1,0 +1,142 @@
+---
+title: "Performance and Optimization with advanced-mark.js"
+sidebarTitle: "Performance"
+description: "Learn how advanced-mark.js achieves fast highlighting and how to optimize for large documents using the CSS Highlight API, combineBy, and other techniques."
+---
+
+advanced-mark.js delivers significantly faster performance than mark.js v8.11.1, particularly when using `acrossElements` mode or processing large documents. The improvements come from a fundamentally different internal architecture: text nodes are aggregated into a single string before matching, avoiding repeated DOM traversal per search term, and the CSS Custom Highlight API path eliminates DOM mutations entirely.
+
+## Performance benchmarks
+
+The following results were measured in **Firefox** comparing mark.js v8.11.1 against advanced-mark.js. Tests were run on a slow processor using advanced-mark.js version 2 — the absolute times will be faster on modern hardware, but the **ratios** are what matter.
+
+### `markRegExp()` — with `acrossElements: true`, 3,000 marked words
+
+| Library       | 100 KB   | 200 KB   | 500 KB   | 1 MB     |
+|---------------|----------|----------|----------|----------|
+| mark.js       | ~350 ms  | ~680 ms  | ~1700 ms | ~2800 ms |
+| advanced-mark | ~30 ms   | ~35 ms   | ~45 ms   | ~60 ms   |
+
+### `markRegExp()` — without `acrossElements`, 3,000 marked words
+
+| Library       | 100 KB   | 200 KB   | 500 KB   | 1 MB     |
+|---------------|----------|----------|----------|----------|
+| mark.js       | ~30 ms   | ~40 ms   | ~70 ms   | ~110 ms  |
+| advanced-mark | ~30 ms   | ~35 ms   | ~40 ms   | ~50 ms   |
+
+### `markRanges()` — 3,000 marked ranges
+
+| Library       | 100 KB   | 200 KB   | 500 KB   | 1 MB     |
+|---------------|----------|----------|----------|----------|
+| mark.js       | ~220 ms  | ~350 ms  | ~970 ms  | ~1700 ms |
+| advanced-mark | ~36 ms   | ~40 ms   | ~51 ms   | ~60 ms   |
+
+### `unmark()` — 34,500 mark elements, 1 MB document; mark time Firefox & Chrome ~360 ms
+
+| Library       | Firefox  | Chrome   |
+|---------------|----------|----------|
+| mark.js       | ~1200 ms | ~1300 ms |
+| advanced-mark | ~210 ms  | ~630 ms  |
+
+The gains are most pronounced in `markRegExp()` with `acrossElements: true`, where the library is up to **~46× faster** at the 1 MB scale.
+
+## CSS Custom Highlight API
+
+The fastest highlighting approach in advanced-mark.js is the [CSS Custom Highlight API](/guides/highlight-api). Because no DOM elements are created, there are zero DOM mutations, zero reflows caused by inserting `<mark>` elements, and no `unmark()` cost from removing them later.
+
+<Tip>
+  Use the CSS Custom Highlight API when highlighting large documents or when your application highlights and re-highlights frequently (e.g. live search). It is by far the most performant approach.
+</Tip>
+
+```js
+let highlight;
+if (typeof Highlight !== 'undefined') {
+  highlight = new Highlight();
+}
+
+new Mark(ctx).mark(searchTerms, {
+  highlight: highlight,
+  highlightName: 'my-highlight'
+});
+```
+
+```css
+::highlight(my-highlight) {
+  background-color: yellow;
+}
+```
+
+## combineBy option
+
+The `combineBy` option (formerly `combinePatterns`) controls how many individual terms from a search array are combined into a single regular expression pattern per run. The default is `10`, meaning an array of 50 terms produces 5 combined patterns and 5 matching passes:
+
+```js
+instance.mark(['str1', 'str2', /* ... */], {
+  combineBy: 10 // default
+});
+```
+
+Setting it to `Infinity` or any number larger than the array length produces a single combined pattern:
+
+```js
+instance.mark(largeArray, {
+  combineBy: Infinity // one giant pattern
+});
+```
+
+Setting it to `1` processes each term individually, which is useful when you need to highlight terms in strict order or when each term requires a separate `done` callback result.
+
+<Warning>
+  When highlighting a large array of strings with the `diacritics` option enabled (and also `ignorePunctuation` or `ignoreJoiners`), a single combined pattern can become enormous — potentially exceeding the browser's RegExp size limit or causing severe slowdowns. In these cases, use a lower `combineBy` value to split the work into smaller batches, or split your input array manually and call `mark()` in multiple passes.
+</Warning>
+
+<Tip>
+  A single combined pattern also prevents highlighting inside already-highlighted elements (because the generated pattern cannot match across `<mark>` tag boundaries). If you need to highlight inside existing marks, use `combineBy: 1`.
+</Tip>
+
+## Avoiding redundant re-highlighting
+
+Always call `unmark()` before re-highlighting to avoid accumulating duplicate `<mark>` elements. Chain the operations using the `done` callback to ensure the previous highlights are fully removed before the next pass begins:
+
+```js
+const instance = new Mark(document.querySelector('#content'));
+
+function highlight(term) {
+  instance.unmark({
+    done: () => {
+      instance.mark(term);
+    }
+  });
+}
+```
+
+This pattern is safe even if there are no existing marks — `unmark()` completes immediately when there is nothing to remove.
+
+<Tip>
+  When using the CSS Custom Highlight API, you can skip the `unmark()` → `mark()` chain entirely by calling `highlight.clear()` to reset the `Highlight` object, then re-running `mark()`. This is faster than calling `unmark()` because it avoids DOM traversal.
+</Tip>
+
+## acrossElements performance
+
+`acrossElements: true` aggregates all text node contents within the context into a single string before running the search. This one-time aggregation step has a small upfront cost, but it enables matches to span across element boundaries and allows the regex engine to match against a single, continuous string rather than re-running against each text node.
+
+For large documents the aggregation cost is negligible compared to the savings from running a single regex pass instead of thousands of per-node passes — as the benchmark tables above demonstrate.
+
+<Tip>
+  If your search terms can span block-element boundaries and you need to handle that correctly, use `acrossElements: true`. Pair it with `blockElementsBoundary` if you want to limit matches to within specific block containers.
+</Tip>
+
+## wrapAllRanges performance caution
+
+The `wrapAllRanges` option enables highlighting of nesting and overlapping ranges or capturing groups. Internally, every time a range is wrapped, two additional objects are inserted into the library's internal range array, requiring array copying and memory allocation.
+
+<Warning>
+  `wrapAllRanges` can cause measurable performance degradation when highlighting a very large number of overlapping matches. The following results were measured on a 1 MB document with 20,800 text nodes (slow processor, advanced-mark.js version 2):
+
+  | Option               | 2,500 marked groups | 29,000 marked groups |
+  |----------------------|---------------------|----------------------|
+  | `wrapAllRanges: true`  | ~120 ms             | ~710 ms              |
+  | `wrapAllRanges: false` | ~70 ms              | ~310 ms              |
+
+  If you have tens of thousands of overlapping matches, consider using the CSS Custom Highlight API instead — this performance issue does not occur when using the Highlight API with `acrossElements` (and `markRanges()` does not require `acrossElements` regardless).
+</Warning>

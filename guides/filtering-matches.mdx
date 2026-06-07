@@ -1,0 +1,237 @@
+---
+title: "Filtering Matches in advanced-mark.js"
+sidebarTitle: "Filtering Matches"
+description: "Learn how to use the filter callback in advanced-mark.js to selectively highlight only the matches you want, with support for early abort."
+---
+
+The `filter` callback gives you fine-grained control over which matches actually get highlighted. Instead of marking every occurrence found by `mark()`, `markRegExp()`, or `markRanges()`, you can inspect each match in context and decide — on a per-match basis — whether to highlight it, skip it, or stop the search entirely.
+
+## How the filter callback works
+
+Every highlighting method accepts a `filter` function in its options object. The callback fires once **per match** (or, when `acrossElements: true` is used, once per text node that is part of the match). It receives contextual information about the current match and **must return `true` to highlight** or `false` to skip.
+
+```js
+// Generic shape of the filter callback
+filter: (nodeOrArray, matchString, matchesSoFar, info) => {
+  // return true  → highlight this match
+  // return false → skip this match
+  return true;
+}
+```
+
+The `info` object passed to every filter callback contains:
+
+| Property | Type | Description |
+|---|---|---|
+| `match` | `array` | The result of `RegExp.exec()` |
+| `count` | `number` | Number of matches highlighted so far |
+| `matchStart` | `boolean` | `true` when this call marks the **start** of a match (`acrossElements` only) |
+| `abort` | `boolean` | Set to `true` to stop the entire search immediately |
+
+<Note>
+When `acrossElements: true` is enabled and a match spans multiple text nodes, the `filter` callback fires **once for each text node** that is part of the match — not just once for the whole match. Use `info.matchStart` to detect the start of a new match when maintaining an external counter.
+</Note>
+
+## Filtering in mark()
+
+The `mark()` filter signature is:
+
+```
+filter: (nodeOrArray, term, matchesSoFar, termMatchesSoFar, info) => boolean
+```
+
+- `nodeOrArray` — the `Text` node containing the match (or an array of nodes when using the Highlight API with `acrossElements` and `rangeAcrossElements`)
+- `term` — the search term currently being matched
+- `matchesSoFar` — total matches highlighted across all terms so far
+- `termMatchesSoFar` — matches for the current term so far
+- `info` — the info object described above
+
+<CodeGroup>
+
+```js With acrossElements
+let count = 0;
+
+instance.mark('AB', {
+  acrossElements: true,
+  filter: (nodeOrArray, term, matchesSoFar, termMatchesSoFar, info) => {
+    // Highlight only the first match
+    info.abort = true;
+    return true;
+
+    // Highlight the first 10 matches (internal counter)
+    if (matchesSoFar >= 10) { info.abort = true; return false; }
+    // equivalent: if (info.count >= 10) { info.abort = true; return false; }
+
+    // Using an external counter (matchStart fires once per match)
+    if (info.matchStart) {
+      count++;
+    }
+
+    // Skip matches 11–19
+    if (count > 10 && count < 20) { return false; }
+
+    // Highlight matches 1–10, abort after 20
+    if (count <= 10) { return false; }
+    else if (count > 20) { info.abort = true; return false; }
+
+    return true;
+  }
+});
+```
+
+```js Without acrossElements
+let count = 0;
+
+instance.mark('AB', {
+  filter: (textNode, term, matchesSoFar, termMatchesSoFar, info) => {
+    // Without acrossElements, each call is exactly one match —
+    // so an external counter increments directly
+    count++;
+
+    // Highlight only the first 10
+    if (count > 10) { info.abort = true; return false; }
+
+    return true;
+  }
+});
+```
+
+</CodeGroup>
+
+## Filtering in markRegExp()
+
+The `markRegExp()` filter signature is slightly different — `term` is replaced by `matchString` and `termMatchesSoFar` is omitted:
+
+```
+filter: (nodeOrArray, matchString, matchesSoFar, info) => boolean
+```
+
+- `matchString` — the matched string (whole match, or the current group's string when `separateGroups` is active)
+- `info.groupIndex` — present when `separateGroups: true`; the index of the capturing group currently being processed
+
+<CodeGroup>
+
+```js With acrossElements
+let count = 0,
+    reg = /.../gi;
+
+instance.markRegExp(reg, {
+  acrossElements: true,
+  filter: (nodeOrArray, matchString, matchesSoFar, info) => {
+    // Highlight only the first match
+    info.abort = true;
+    return true;
+
+    // Highlight the first 10 matches
+    if (matchesSoFar >= 10) { info.abort = true; return false; }
+
+    // External counter — only increment at the start of each match
+    if (info.matchStart) {
+      count++;
+    }
+
+    // Skip matches 11–19
+    if (count > 10 && count < 20) { return false; }
+
+    // Highlight 1–10, abort after 20
+    if (count <= 10) { return false; }
+    else if (count > 20) {
+      info.abort = true;
+      return false;
+    }
+
+    return true;
+  }
+});
+```
+
+```js Without acrossElements
+let count = 0,
+    reg = /.../gi;
+
+instance.markRegExp(reg, {
+  filter: (textNode, matchString, matchesSoFar, info) => {
+    // Each invocation corresponds to exactly one match
+    count++;
+
+    if (count > 10) { info.abort = true; return false; }
+
+    return true;
+  }
+});
+```
+
+</CodeGroup>
+
+## Filtering in markRanges()
+
+The `markRanges()` filter callback has a distinct signature:
+
+```
+filter: (nodeOrArray, range, matchString, index) => boolean
+```
+
+- `nodeOrArray` — the text node(s) that contain the range
+- `range` — the range object `{ start, length }` currently being processed
+- `matchString` — the text content matched by this range
+- `index` — the zero-based index of this range in the original ranges array
+
+```js
+instance.markRanges([
+  { start: 0, length: 10 },
+  { start: 50, length: 5 }
+], {
+  filter: (nodeOrArray, range, matchString, index) => {
+    // Skip the second range
+    if (index === 1) return false;
+    return true;
+  }
+});
+```
+
+## Filtering via the each callback
+
+The `each` callback — which fires after a match element has been created — also exposes `info.abort`. This lets you cap highlights after the fact, without needing to use `filter` at all:
+
+```js
+instance.mark(str, {
+  // acrossElements: true,
+  each: (markElement, info) => {
+    // Highlight only the first match
+    info.abort = true;
+
+    // Highlight only the first 10 matches
+    if (info.count >= 10) {
+      info.abort = true;
+    }
+  }
+});
+```
+
+## Aborting early
+
+Two mechanisms are available to stop highlighting mid-search:
+
+**`info.abort = true`** — works in both `filter` and `each` and is the universal approach. Setting it stops the search after the current match is processed.
+
+**`regex.lastIndex = Infinity`** — available only in `markRegExp()` when you hold a direct reference to the `RegExp` object. Assigning `Infinity` to `lastIndex` causes the next `exec()` call to return `null`, ending the search naturally.
+
+```js
+const reg = /\bword\b/gi;
+
+instance.markRegExp(reg, {
+  filter: (textNode, matchString, matchesSoFar, info) => {
+    if (matchesSoFar >= 5) {
+      // Either of these will stop the search:
+      info.abort = true;
+      // reg.lastIndex = Infinity;
+      return false;
+    }
+    return true;
+  }
+});
+```
+
+<Note>
+`info.abort` and `regex.lastIndex = Infinity` are equivalent when used inside `filter`. Prefer `info.abort` if you don't have a reference to the `RegExp` outside the callback, or when using `mark()`.
+</Note>

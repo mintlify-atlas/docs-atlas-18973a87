@@ -1,47 +1,271 @@
 ---
-title: "Quickstart"
-description: "Begin with a guide on the fastest path to a successful outcome"
+title: "Get Started with advanced-mark.js in Minutes"
+sidebarTitle: "Quickstart"
+description: "Install advanced-mark.js, create your first Mark instance, highlight text in the DOM, and style your results in just a few steps."
 ---
 
-Describe how someone begins using your product. What is the first thing they need to do? Are there any prerequisites?
-
-A quickstart should take someone from zero to using your product. They'll get a quick win and a sense of what they can accomplish.
-
-## Prerequisites
-
-Before you begin, you must have:
-
-- Requirement one (for example, Node.js 18+, a free account, an API key)
-- Requirement two (for example, a compatible device, a compatible browser, a compatible operating system)
-
-## Get started
+This page walks you through everything you need to go from zero to your first working text highlight: installing the package, importing it into your project, initialising a `Mark` instance, calling `mark()`, and styling the results. By the end you'll have a solid foundation for exploring the full API.
 
 <Steps>
-  <Step title="Install">
-    Describe how to install your product or sign up.
 
-    ```bash
-    npm install your-package
-    ```
-  </Step>
-  <Step title="Configure">
-    Describe any setup or configuration needed before first use.
+  <Step title="Install the package">
+    Add advanced-mark.js to your project using your preferred package manager:
 
-    ```bash
-    your-cli init
-    ```
-  </Step>
-  <Step title="Run it">
-    Show the first thing a user does to see it working.
+    <CodeGroup>
 
-    ```bash
-    your-cli start
+    ```bash npm
+    npm install advanced-mark.js
     ```
+
+    ```bash yarn
+    yarn add advanced-mark.js
+    ```
+
+    ```bash pnpm
+    pnpm add advanced-mark.js
+    ```
+
+    </CodeGroup>
+
+    <Note>
+      If you're loading the library directly from a `<script>` tag without a bundler, download `mark.js` from the `dist/` folder (or use a CDN) and include it in your HTML. Add the `charset="utf-8"` attribute to ensure correct handling of special characters:
+
+      ```html
+      <script src="path/to/mark.js" charset="utf-8"></script>
+      ```
+    </Note>
+
   </Step>
+
+  <Step title="Import the library">
+    Import advanced-mark.js using the module format that matches your project setup:
+
+    <Tabs>
+
+      <Tab title="ES Module">
+        ```js
+        import Mark from 'advanced-mark.js';
+        ```
+
+        For bundlers (Webpack, Vite, Rollup, etc.) or environments that support native ES modules, this is the recommended import style. The package's `types` field also points to the ES module declaration file, so TypeScript support is automatic.
+      </Tab>
+
+      <Tab title="CommonJS">
+        ```js
+        const Mark = require('advanced-mark.js');
+        ```
+
+        Use this in Node.js environments or older bundler configurations. The `main` field in `package.json` resolves to `dist/mark.js` (UMD), which is fully CommonJS-compatible.
+      </Tab>
+
+      <Tab title="Script tag (no bundler)">
+        ```html
+        <!-- Place before your closing </body> tag -->
+        <script src="path/to/mark.js" charset="utf-8"></script>
+
+        <script>
+          // Mark is available as a global constructor
+          var instance = new Mark(document.querySelector('article'));
+          instance.mark('lorem ipsum');
+        </script>
+        ```
+      </Tab>
+
+    </Tabs>
+
+  </Step>
+
+  <Step title="Create a Mark instance">
+    Instantiate `Mark` by passing a **context** — the DOM region you want to search inside. The constructor accepts several types:
+
+    | Context type | Example |
+    |---|---|
+    | Single element | `document.querySelector('article')` |
+    | NodeList | `document.querySelectorAll('.content')` |
+    | Array of elements | `[el1, el2, el3]` |
+    | Selector string | `'article, .post-body'` |
+
+    ```js
+    // Single element
+    const instance = new Mark(document.querySelector('article'));
+
+    // NodeList — highlights inside every matched element
+    const instance = new Mark(document.querySelectorAll('.content'));
+
+    // Selector string — equivalent to querySelectorAll()
+    const instance = new Mark('article, .post-body');
+    ```
+
+    <Note>
+      When passing an array of elements, advanced-mark.js automatically sorts them by their position in the document, so range-based operations remain accurate regardless of the order you pass them in.
+    </Note>
+
+  </Step>
+
+  <Step title="Call mark() to highlight text">
+    Once you have an instance, call `mark()` with the term (or array of terms) you want to highlight:
+
+    ```js
+    const instance = new Mark(document.querySelector('article'));
+
+    instance.mark('lorem ipsum', {
+      separateWordSearch: true,
+      done: (count) => console.log(`Marked ${count} matches`),
+    });
+    ```
+
+    Pass an array to highlight multiple terms in one call:
+
+    ```js
+    instance.mark(['lorem', 'ipsum', 'dolor'], {
+      caseSensitive: false,
+      accuracy: 'partially',
+    });
+    ```
+
+    Always call `unmark()` before re-running `mark()` to avoid stacking duplicate highlight elements:
+
+    ```js
+    instance.unmark({
+      done: () => instance.mark('new search term'),
+    });
+    ```
+
+  </Step>
+
+  <Step title="Style your highlights with CSS">
+    advanced-mark.js wraps matched text in `<mark>` elements by default. Target them with CSS:
+
+    ```css
+    mark {
+      background-color: yellow;
+      color: black;
+    }
+    ```
+
+    You can scope styles to only affect marks created by the library by targeting the `data-markjs` attribute added to each element:
+
+    ```css
+    mark[data-markjs] {
+      background-color: #ffe066;
+      border-radius: 2px;
+      padding: 0 2px;
+    }
+    ```
+
+    <Tip>
+      If you're using the **CSS Custom Highlight API** (via the `highlight` option), no `<mark>` elements are inserted into the DOM. Use the `::highlight()` pseudo-element instead:
+
+      ```css
+      ::highlight(advanced-markjs) {
+        background-color: yellow;
+        color: black;
+      }
+      ```
+    </Tip>
+
+  </Step>
+
 </Steps>
 
-<Tip>
-  Give people a way to get help. This could be a link to a support page, a chat with a customer support agent, or a forum for your product.
+---
 
-  Example: Need help? Reach out to us at [support@yourcompany.com](mailto:support@yourcompany.com).
-</Tip>
+## Complete Working Example
+
+Here is a self-contained example you can drop into any HTML file:
+
+```html
+<article>
+  <p>Lorem ipsum dolor sit amet, consectetur adipiscing elit.</p>
+  <p>Sed do eiusmod tempor incididunt ut lorem et dolore magna.</p>
+</article>
+```
+
+```js
+const instance = new Mark(document.querySelector('article'));
+
+instance.mark('lorem ipsum', {
+  separateWordSearch: true,
+  caseSensitive: false,
+  done: (count) => console.log(`Marked ${count} matches`),
+});
+```
+
+```css
+mark {
+  background-color: yellow;
+  color: black;
+}
+```
+
+The `separateWordSearch: true` option splits the string `'lorem ipsum'` into individual words and highlights each one independently. The `done` callback receives the total number of mark elements created.
+
+---
+
+## jQuery Usage
+
+If your project already uses jQuery, load the jQuery plugin build and call `mark()` directly on a jQuery selection:
+
+<Tabs>
+
+  <Tab title="ES Module (jQuery)">
+    ```js
+    import 'advanced-mark.js/dist/jquery.mark.es6.js';
+
+    $('article').mark('lorem ipsum', {
+      separateWordSearch: true,
+    });
+    ```
+  </Tab>
+
+  <Tab title="Script tag (jQuery)">
+    ```html
+    <!-- jQuery must be loaded first -->
+    <script src="path/to/jquery.min.js"></script>
+    <script src="path/to/jquery.mark.js" charset="utf-8"></script>
+
+    <script>
+      $('article').mark('lorem ipsum', {
+        separateWordSearch: true,
+      });
+    </script>
+    ```
+  </Tab>
+
+</Tabs>
+
+The jQuery plugin exposes all four API methods (`mark`, `markRegExp`, `markRanges`, `unmark`) on every jQuery element:
+
+```js
+// Highlight using a regular expression
+$('article').markRegExp(/lor[^]?m/gmi);
+
+// Highlight by character ranges
+$('article').markRanges([{ start: 0, length: 5 }]);
+
+// Remove all highlights
+$('article').unmark();
+```
+
+---
+
+## Next Steps
+
+Explore the individual API references to learn about every available option:
+
+<CardGroup cols={2}>
+  <Card title="mark()" icon="highlighter" href="/api/mark">
+    Highlight plain-text search terms with accuracy modes, diacritics, synonyms,
+    wildcards, and more.
+  </Card>
+  <Card title="markRegExp()" icon="brackets-curly" href="/api/mark-regexp">
+    Highlight regular expression matches, with support for named groups and
+    cross-element patterns.
+  </Card>
+  <Card title="markRanges()" icon="arrows-left-right" href="/api/mark-ranges">
+    Highlight arbitrary character or line ranges specified as start/length pairs.
+  </Card>
+  <Card title="unmark()" icon="eraser" href="/api/unmark">
+    Remove highlights and restore the original DOM text node structure.
+  </Card>
+</CardGroup>

@@ -1,0 +1,188 @@
+---
+title: "unmark() — Remove Highlights from the DOM"
+sidebarTitle: "unmark()"
+description: "Remove all highlighted mark elements created by advanced-mark.js, normalize text nodes, or clear CSS Custom Highlight API ranges from the HighlightRegistry."
+---
+
+`unmark()` removes all mark elements created by advanced-mark.js and normalizes text nodes back to their original state. When using the **CSS Custom Highlight API**, it removes the registered `StaticRange`/`Range` objects from the `HighlightRegistry` instead of modifying the DOM. Use `unmark()` before calling `mark()` again to avoid stacking highlights on top of previous ones.
+
+## Syntax
+
+```js
+// Vanilla JS
+const instance = new Mark(context);
+instance.unmark([options]);
+
+// jQuery
+$(selector).unmark([options]);
+```
+
+## Parameters
+
+<ParamField path="options" type="object">
+  Optional configuration object. All properties are optional.
+
+  <Expandable title="options properties">
+
+  <ParamField path="element" type="string" default="'mark'">
+    The element name to target for removal. Must match the `element` option you used when calling `mark()`, `markRegExp()`, or `markRanges()`.
+
+    Use `'*'` to remove any element that carries a `data-markjs` attribute, regardless of tag name — useful when highlights were created using different element types in the same context.
+  </ParamField>
+
+  <ParamField path="className" type="string" default="''">
+    When provided, only mark elements with this specific CSS class are removed. Elements without the class are left in place. Useful for selectively clearing one group of highlights while keeping others.
+  </ParamField>
+
+  <ParamField path="exclude" type="string | string[]" default="[]">
+    A CSS selector string or array of selectors for DOM subtrees that should be skipped during the removal operation. Mark elements inside excluded subtrees are left untouched.
+
+    <Warning>
+      If you used the CSS Custom Highlight API with `acrossElements: true` and `rangeAcrossElements: true`, ranges that overlap an excluded element cannot be selectively excluded — the entire range will be removed.
+    </Warning>
+  </ParamField>
+
+  <ParamField path="highlight" type="Highlight" default="undefined">
+    A browser [Highlight](https://developer.mozilla.org/en-US/docs/Web/API/Highlight) object. When provided, the library **skips DOM unwrapping entirely** and only removes ranges from the `HighlightRegistry`. The `element` and `className` options are ignored in this mode.
+
+    This is a performance optimization: it avoids iterating the DOM when you know the context only contains Highlight API ranges and no wrapped elements.
+  </ParamField>
+
+  <ParamField path="highlightName" type="string | string[]" default="'advanced-markjs'">
+    The name or array of names of `Highlight` objects whose ranges should be cleared from `CSS.highlights`. This corresponds to the `highlightName` you used when calling a marking method.
+
+    ```js
+    // Clear a single named highlight
+    instance.unmark({ highlightName: 'search-results' });
+
+    // Clear multiple named highlights at once
+    instance.unmark({ highlightName: ['search-results', 'current-match'] });
+    ```
+  </ParamField>
+
+  <ParamField path="shadowDOM" type="boolean" default="undefined">
+    When `true`, also removes highlights inside shadow DOM roots within the context.
+  </ParamField>
+
+  <ParamField path="iframes" type="boolean" default="false">
+    When `true`, also removes highlights inside same-origin `<iframe>` elements within the context.
+  </ParamField>
+
+  <ParamField path="iframesTimeout" type="number" default="5000">
+    Maximum time in milliseconds to wait for an iframe to load before skipping it. Only relevant when `iframes` is `true`.
+  </ParamField>
+
+  <ParamField path="debug" type="boolean" default="false">
+    When `true`, logs debug messages to the object specified by `log`.
+  </ParamField>
+
+  <ParamField path="log" type="object" default="window.console">
+    The object used for debug logging. Must expose `warn` and `log` methods.
+  </ParamField>
+
+  <ParamField path="done" type="function">
+    A callback invoked once after all highlights have been removed and text nodes have been normalized. Takes no parameters.
+
+    ```js
+    done: () => {}
+    ```
+
+    Use this callback to safely chain a new `mark()` call immediately after clearing previous highlights.
+  </ParamField>
+
+  </Expandable>
+</ParamField>
+
+## Default Options
+
+```js
+const options = {
+  highlight: undefined,
+  highlightName: 'advanced-markjs',
+  element: 'mark',
+  className: '',
+  exclude: [],
+  shadowDOM: false,
+  iframes: false,
+  iframesTimeout: 5000,
+  done: () => {},
+  debug: false,
+  log: window.console,
+};
+```
+
+## Usage Examples
+
+<CodeGroup>
+
+```js Basic unmark
+const instance = new Mark(document.querySelector('.content'));
+
+// Remove all default <mark> elements
+instance.unmark();
+```
+
+```js Unmark only a specific class
+const instance = new Mark(document.querySelector('.content'));
+
+// Only remove marks with the 'secondary' class; 'primary' marks stay
+instance.unmark({
+  className: 'secondary',
+});
+```
+
+```js Unmark CSS Custom Highlight API ranges
+const highlight = new Highlight();
+CSS.highlights.set('search-results', highlight);
+
+const instance = new Mark(document.querySelector('.content'));
+
+// Mark using the Highlight API
+instance.mark('example', {
+  highlight,
+  highlightName: 'search-results',
+});
+
+// Later, clear the ranges from the registry
+instance.unmark({
+  highlight,
+  highlightName: 'search-results',
+});
+```
+
+```js Chaining: unmark then re-mark
+const instance = new Mark(document.querySelector('.content'));
+
+function updateSearch(newSearchTerm) {
+  // Remove previous highlights, then immediately apply new ones
+  instance.unmark({
+    done: () => {
+      instance.mark(newSearchTerm, {
+        separateWordSearch: false,
+      });
+    },
+  });
+}
+
+updateSearch('advanced marking');
+```
+
+```js Unmark any element with data-markjs
+const instance = new Mark(document.querySelector('.content'));
+
+// Highlights were created using mixed elements (span, em, mark, etc.)
+// Use '*' to remove all of them in one pass
+instance.unmark({
+  element: '*',
+});
+```
+
+</CodeGroup>
+
+<Note>
+  When the `highlight` option is provided, `unmark()` **only** removes ranges from the `HighlightRegistry` — it does not unwrap any DOM elements. Use this when you are exclusively using the CSS Custom Highlight API and want to avoid an unnecessary DOM traversal.
+</Note>
+
+<Note>
+  To unmark elements that were marked with a custom tag (e.g. `element: 'span'`), you must pass the same tag name to `unmark()`. Alternatively, pass `element: '*'` to remove any element carrying the `data-markjs` attribute, regardless of tag name. Note that using `'*'` applies broadly — only use it when you are certain all `data-markjs` elements in the context should be removed.
+</Note>

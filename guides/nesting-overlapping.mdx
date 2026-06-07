@@ -1,0 +1,140 @@
+---
+title: "Nesting and Overlapping Ranges and Match Groups"
+sidebarTitle: "Nesting & Overlapping"
+description: "Enable wrapAllRanges to mark nested or overlapping ranges with markRanges() and overlapping RegExp capturing groups with markRegExp(), including groups inside lookarounds."
+---
+
+By default, if one highlighted range (or capturing group) overlaps with or is nested inside another, the inner range is skipped. The `wrapAllRanges: true` option removes this restriction — all ranges and groups are wrapped independently, regardless of nesting depth or overlap.
+
+- **`markRanges()`** — `wrapAllRanges` wraps every range whose start index falls within `[0, context length]`, even if ranges overlap.
+- **`markRegExp()`** — combine `wrapAllRanges: true` with `separateGroups: true` to wrap capturing groups at any nesting level, including groups inside positive lookaround assertions.
+
+<Warning>
+`wrapAllRanges` can cause noticeable performance degradation when marking a very large number of overlapping matches. Each wrap operation inserts two extra objects into an internal array, leading to repeated memory allocation and copying. See [Performance considerations](#performance-considerations) for benchmarks.
+</Warning>
+
+## Overlapping ranges with markRanges()
+
+Supply an array of range objects — some of which overlap — and set `wrapAllRanges: true`. Use the `each` callback to inspect the original range object and apply different classes:
+
+```js
+const ranges = [
+  { start: 0,  length: 50 },
+  { start: 10, length: 20, nested: true },
+  // ...more ranges
+];
+
+instance.markRanges(ranges, {
+  wrapAllRanges: true,
+  each: (markElement, range) => {
+    // The range object you supplied is passed back here
+    if (range.nested) {
+      markElement.className = 'nested';
+    }
+  }
+});
+```
+
+Any property you add to a range object (like `nested: true` above) is preserved and passed back in `each`, making it easy to differentiate ranges without keeping a parallel lookup table.
+
+## Overlapping groups with markRegExp()
+
+To wrap all capturing groups — regardless of whether they are nested inside another group — combine `separateGroups: true` with `wrapAllRanges: true`:
+
+```js
+instance.markRegExp(/\w+\s((nested group)\s+\w+)/dg, {
+  acrossElements: true,
+  separateGroups: true,
+  wrapAllRanges: true,
+  each: (markElement, info) => {
+    // info.groupIndex identifies which group produced this element
+    if (info.groupIndex === 2) {
+      markElement.className = 'nested-group';
+    }
+  }
+});
+```
+
+Without `wrapAllRanges`, wrapping group 1 would cause group 2 (which is nested inside group 1) to be ignored. With `wrapAllRanges: true` both are wrapped and you can style them independently.
+
+## Capturing groups inside lookaround assertions
+
+`wrapAllRanges: true` also enables wrapping of capturing groups that appear inside **positive** lookaround assertions (`(?=…)` and `(?<=…)`). This is not possible without the option because lookarounds produce zero-width matches and their groups would otherwise be skipped as overlapping.
+
+```js
+// Highlight word1, word2, and word3 wherever all three appear in the same sentence
+const regex = /(?=[^.]*?(word1))(?=[^.]*?(word2))(?=[^.]*?(word3))/dgi;
+
+instance.markRegExp(regex, {
+  acrossElements: true,
+  separateGroups: true,
+  wrapAllRanges: true
+});
+```
+
+## Next/Previous navigation with overlapping matches
+
+Standard "start element" navigation techniques break down with overlapping marks because a single logical match can produce multiple `<mark>` elements at different DOM positions. The recommended approach is to store a numeric match identifier on each element using `data-markjs`, then query by that identifier on navigation:
+
+```js
+let currentIndex = 0,
+    matchCount,
+    marks,
+    // Highlight word1, word2, and word3 wherever all three appear in a sentence
+    regex = /(?=[^.]*?(word1))(?=[^.]*?(word2))(?=[^.]*?(word3))/dgi;
+
+instance.markRegExp(regex, {
+  acrossElements: true,
+  separateGroups: true,
+  wrapAllRanges: true,
+  each: (markElement, info) => {
+    // Use info.count as a stable, unique match identifier
+    markElement.setAttribute('data-markjs', info.count);
+  },
+  done: (totalMarks, totalMatches) => {
+    marks = $('mark');
+    matchCount = totalMatches;
+  }
+});
+
+prevButton.click(function () {
+  if (--currentIndex <= 0) currentIndex = 0;
+  highlightMatchGroups();
+});
+
+nextButton.click(function () {
+  if (++currentIndex > matchCount) currentIndex = matchCount;
+  highlightMatchGroups();
+});
+
+function highlightMatchGroups() {
+  marks.removeClass('current');
+  // Select all marks that belong to the current match
+  const elems = marks
+    .filter((i, elem) => $(elem).data('markjs') === currentIndex)
+    .addClass('current');
+  // Also activate any descendant marks (nested groups)
+  elems.find('*[data-markjs]').addClass('current');
+}
+```
+
+<Note>
+`info.count` increments once per **match**, not once per mark element, so every `<mark>` produced by the same regex match receives the same `data-markjs` value. This makes it trivial to select all elements for a given logical match.
+</Note>
+
+## Performance considerations
+
+`wrapAllRanges` is implemented by maintaining a sorted array of wrapped positions. Each new wrap inserts two index entries, requiring array copying and memory allocation proportional to the number of existing overlapping marks.
+
+The table below was measured on a 1 MB file containing 20,800 text nodes (run on a slow processor with advanced-mark.js v2 — the ratios matter more than the absolute times):
+
+| Option | 2,500 marked groups | 29,000 marked groups |
+|---|---|---|
+| `wrapAllRanges: true` | ~120 ms | ~710 ms |
+| `wrapAllRanges: false` | ~70 ms | ~310 ms |
+
+For very large documents with tens of thousands of overlapping marks, the overhead roughly doubles compared to non-overlapping mode.
+
+<Tip>
+If you are using the **CSS Custom Highlight API** (by passing a `Highlight` object to the `highlight` option), `wrapAllRanges` has a much smaller performance impact because the browser handles rendering without DOM mutation. Wrapping with the Highlight API avoids the repeated layout invalidations that make DOM-based overlapping marks expensive.
+</Tip>

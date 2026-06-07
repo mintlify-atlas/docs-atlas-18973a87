@@ -1,0 +1,133 @@
+---
+title: "Highlighting Separate RegExp Capturing Groups"
+sidebarTitle: "Separate Groups"
+description: "Use the separateGroups option with the RegExp d flag to highlight individual capturing groups independently, with full filter and counter support."
+---
+
+By default, `markRegExp()` highlights the entire string matched by a regular expression. Enabling `separateGroups: true` changes this behaviour — instead of wrapping the whole match, the library wraps each **capturing group** individually. This lets you apply different styles to different parts of a pattern, skip specific groups entirely, or count groups separately.
+
+<Warning>
+The `separateGroups` option requires the `d` flag on the `RegExp`. Without it the library cannot determine group positions. Always write your pattern as `/pattern/gd` (or `/pattern/gdi`, etc.) when using `separateGroups`.
+</Warning>
+
+## Basic usage
+
+Pass `separateGroups: true` alongside a regex that has both the `g` and `d` flags. Each capturing group in the pattern is treated as an independent highlight target:
+
+```js
+instance.markRegExp(/(hello).+(world)/dgi, {
+  separateGroups: true
+});
+// "hello" and "world" are each wrapped in a <mark> element;
+// the text between them is left unwrapped.
+```
+
+You can pair `separateGroups` with `element` and `className` as usual, or use the `each` callback to assign per-group classes (see [Counting groups](#counting-groups) below).
+
+## Filtering specific groups
+
+Use `info.groupIndex` inside the `filter` callback to include or exclude individual groups. `groupIndex` is the 1-based index of the group currently being considered for wrapping.
+
+```js
+instance.markRegExp(/(AB)\b.+\b(?<gr2>CD)?.+(EF)\b/dgi, {
+  // acrossElements: true,
+  separateGroups: true,
+  filter: (textNode, matchString, matchesSoFar, info) => {
+    // Skip group 1 entirely — only mark groups 2 and 3
+    if (info.groupIndex === 1) return false;
+
+    // Alternatively, filter on the matched text content
+    // (less reliable if the same string appears in multiple groups)
+    // if (matchString === 'AB') return false;
+
+    return true;
+  }
+});
+```
+
+<Note>
+When a match spans multiple elements (`acrossElements: true`), `info.groupIndex` remains the same for every text-node call made while wrapping that group. Use it safely as a stable identifier across node boundaries.
+</Note>
+
+### Filtering a whole match based on group content
+
+You can inspect `info.match` — the raw `RegExp.exec()` result — to make filtering decisions based on whether a particular group matched at all:
+
+```js
+instance.markRegExp(/(AB)\b.+\b(?<gr2>CD)?.+(EF)\b/dgi, {
+  separateGroups: true,
+  filter: (textNode, matchString, matchesSoFar, info) => {
+    // Only highlight matches where group 2 (named "gr2") was captured
+    if (info.match[2]) return true;
+
+    // Named capturing groups are available via info.match.groups
+    if (info.match.groups.gr2) return true;
+
+    return false;
+  }
+});
+```
+
+## Group highlighting with acrossElements
+
+When `acrossElements: true` is combined with `separateGroups: true`, use the `each` callback's `info.groupStart` property to detect when a new group begins — this is the right place to assign per-group classes or update per-group counters:
+
+```js
+let groupCount = 0, gr1Count = 0, gr2Count = 0;
+
+instance.markRegExp(/(AB)\b.+?\b(CD)/dgi, {
+  acrossElements: true,
+  separateGroups: true,
+  each: (markElement, info) => {
+    // info.count — total matches marked so far
+
+    // groupStart is true only on the first element of each group
+    if (info.groupStart) {
+      groupCount++;
+
+      if (info.groupIndex === 1) {
+        markElement.className = 'group1-highlight';
+        gr1Count++;
+
+      } else if (info.groupIndex === 2) {
+        markElement.className = 'group2-highlight';
+        gr2Count++;
+      }
+    }
+  }
+});
+```
+
+`info.groupStart` fires exactly once per group per match, even if the group spans several text nodes. It is only available when both `acrossElements: true` and `separateGroups: true` are active.
+
+## Counting groups
+
+Without `acrossElements`, every `each` call corresponds to exactly one mark element for one group. Use `info.groupIndex` to maintain per-group counters:
+
+```js
+let groupCount = 0, gr1Count = 0;
+
+instance.markRegExp(/(AB).+?(CD)/dgi, {
+  separateGroups: true,
+  each: (markElement, info) => {
+    // Increment overall group counter for every wrapped element
+    groupCount++;
+
+    // Maintain an individual count for group 1
+    if (info.groupIndex === 1) {
+      gr1Count++;
+    }
+  }
+});
+```
+
+## Nesting rule
+
+The library applies a nesting rule when `wrapAllRanges` is not enabled:
+
+- **Without `wrapAllRanges`** — if a parent group has already been wrapped, all groups nested inside it are ignored. To highlight a nested group, you must filter out the parent group in `filter` so it is skipped, allowing the nested group to be processed.
+- **With `wrapAllRanges: true`** — parent and nested groups are all wrapped independently. Use `filter` or `each` to remove any groups you don't need.
+
+<Note>
+See [Nesting & Overlapping](/guides/nesting-overlapping) for full details on using `wrapAllRanges` to highlight capturing groups at any nesting depth, including groups inside lookaround assertions.
+</Note>

@@ -1,0 +1,163 @@
+---
+title: "Highlighting Inside Shadow DOM and iframes"
+sidebarTitle: "Shadow DOM & iframes"
+description: "Use the shadowDOM and iframes options to traverse encapsulated DOM environments, injecting highlights and custom styles into shadow roots and same-origin iframes."
+---
+
+advanced-mark.js can traverse **open shadow roots** and **same-origin iframes** to find and highlight text inside them. Because these environments maintain their own DOM trees and style scopes, the library provides dedicated options for both enabling traversal and injecting custom styles that apply within those encapsulated contexts.
+
+---
+
+## Shadow DOM
+
+### Enabling shadow DOM traversal
+
+Set `shadowDOM: true` to allow advanced-mark.js to descend into shadow roots when searching for text to highlight:
+
+```js
+const instance = new Mark(document.querySelector('#host'));
+
+instance.mark('search term', {
+  shadowDOM: true
+});
+```
+
+<Note>
+  Shadow DOM traversal only works with shadow roots that have `mode: 'open'` **and** that have already been created before `mark()` is called. Closed shadow roots (`mode: 'closed'`) are not accessible.
+</Note>
+
+### Custom styles in shadow DOM
+
+Because shadow roots use encapsulated styles, `mark {}` rules defined in the main document's stylesheet do not apply inside a shadow root. Use the `shadowDOM` object form to inject a `<style data-markjs>` element directly into the shadow root:
+
+```js
+instance.mark('search term', {
+  shadowDOM: {
+    style: 'mark { background: yellow; color: black; }'
+  }
+});
+```
+
+The library appends the style element at the end of the shadow root's child nodes. The style is injected regardless of whether any matches are found in that shadow root.
+
+### CSS Custom Highlight API in shadow DOM
+
+When using the [CSS Custom Highlight API](/guides/highlight-api), add the `::highlight()` pseudo-element rule to the `shadowDOM` style property so that the highlight is styled correctly inside the shadow root:
+
+```js
+instance.mark('search term', {
+  highlight: myHighlightObject,
+  highlightName: 'my-highlight',
+  shadowDOM: {
+    style: '::highlight(my-highlight) { background-color: yellow; }'
+  }
+});
+```
+
+```css
+/* In the main document stylesheet */
+::highlight(my-highlight) {
+  background-color: yellow;
+}
+```
+
+### Using inline styles as an alternative
+
+If you need fine-grained per-element control without injecting a shared stylesheet, you can apply inline styles inside the `each` callback. A shadow root is a `DocumentFragment`, so you can detect it by checking `nodeType`:
+
+```js
+instance.mark('search term', {
+  shadowDOM: true,
+  each: (markElement, info) => {
+    // A shadow root is a DocumentFragment (nodeType 11)
+    if (markElement.getRootNode().nodeType === Node.DOCUMENT_FRAGMENT_NODE) {
+      markElement.style.color = 'red';
+    }
+  }
+});
+```
+
+<Warning>
+  Inline styles applied via the `each` callback do **not** work when using the CSS Custom Highlight API, because no `<mark>` element is created — the `each` callback receives a `StaticRange` or `Range` object instead of an HTML element.
+</Warning>
+
+### Removing shadow DOM styles
+
+To remove an injected style from a shadow root, call `unmark()` with the `shadowDOM` style option set to any string value:
+
+```js
+instance.unmark({
+  shadowDOM: { style: 'any string' }
+});
+```
+
+---
+
+## iframes
+
+### Enabling iframe traversal
+
+Set `iframes: true` to allow advanced-mark.js to search inside `<iframe>` elements on the page:
+
+```js
+const instance = new Mark(document.querySelector('#container'));
+
+instance.mark('search term', {
+  iframes: true
+});
+```
+
+<Note>
+  iframe traversal only works with **same-origin** iframes. Cross-origin iframes are subject to browser security restrictions and cannot be accessed.
+</Note>
+
+### Custom styles in iframes
+
+Like shadow roots, iframes have their own style scope. Use the `iframes` object form to inject a `<style data-markjs>` element into the iframe's `<head>`:
+
+```js
+instance.mark('search term', {
+  iframes: {
+    style: 'mark { background: yellow; color: black; }'
+  }
+});
+```
+
+For the CSS Custom Highlight API, add the `::highlight()` rule to the iframe style:
+
+```js
+instance.mark('search term', {
+  highlight: myHighlightObject,
+  highlightName: 'my-highlight',
+  iframes: {
+    style: '::highlight(my-highlight) { background-color: yellow; }'
+  }
+});
+```
+
+<Note>
+  The style element is injected into every matching iframe regardless of whether that iframe contains any matches.
+</Note>
+
+### iframesTimeout
+
+If an iframe is still loading when `mark()` is called, the library waits up to `iframesTimeout` milliseconds before skipping that iframe. The default is `5000` ms:
+
+```js
+instance.mark('search term', {
+  iframes: true,
+  iframesTimeout: 8000 // wait up to 8 seconds for slow iframes
+});
+```
+
+Increase this value for iframes that load external resources slowly, or decrease it if you want the highlighting operation to complete quickly even when some iframes are unavailable.
+
+### Removing iframe styles
+
+To remove an injected style from iframes, call `unmark()` with the `iframes` style option set to any string value:
+
+```js
+instance.unmark({
+  iframes: { style: 'any string' }
+});
+```

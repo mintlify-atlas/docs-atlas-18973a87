@@ -1,0 +1,104 @@
+---
+title: "Highlighting Lines with markRanges and markLines"
+sidebarTitle: "Mark Lines"
+description: "Use the markLines option with markRanges() to highlight whole lines by line number in pre elements, code blocks, and br-formatted content."
+---
+
+The `markLines` option changes the behavior of `markRanges()` so that it works with **line numbers** instead of character offsets. Instead of specifying a byte position and character count, you specify a starting line number and a count of lines to highlight. This makes it especially useful inside `<pre>` elements and code blocks, where each line of content is a distinct logical unit.
+
+## How markLines works
+
+When `markLines: true` is set, the `start` property of each range object becomes a **1-based line number**, and `length` becomes the **number of lines** to highlight from that starting line.
+
+- The library correctly handles `<br>` elements as line separators in addition to newline characters, so it works both in `<pre>` blocks and in HTML content that uses `<br>` for formatting.
+- The option can be combined with `wrapAllRanges: true` to highlight **nested or overlapping line ranges**, for example to independently layer a background highlight over a selection that is already highlighted.
+- It can be used in non-`<pre>` elements as long as the HTML page is not minified or uses `<br>` elements for line formatting.
+
+<Note>
+  The minimum line number is **1**. This differs from text ranges used without `markLines`, where `start` can be `0`.
+</Note>
+
+## Highlight a single line
+
+To highlight exactly one line, pass a range with `length: 1` and set `markLines: true`:
+
+```js
+const instance = new Mark(document.querySelector('pre'));
+
+instance.markRanges([{ start: 5, length: 1 }], {
+  markLines: true
+});
+```
+
+This highlights line 5 of the `<pre>` element. The generated `<mark>` element wraps all text content on that line.
+
+## Scroll to a highlighted line
+
+A common pattern is to highlight a specific line and then scroll it into view. Use the `each` callback to capture the first mark element of the match (identified by `info.matchStart`), then scroll to it in the `done` callback:
+
+```js
+let elem;
+const instance = new Mark(document.querySelector('pre'));
+
+instance.markRanges([{ start: line, length: 1 }], {
+  markLines: true,
+  each: (markElement, range, info) => {
+    if (info.matchStart) elem = markElement;
+    markElement.className = 'mark-line';
+  },
+  done: () => {
+    if (elem) elem.scrollIntoView();
+  }
+});
+```
+
+The `info.matchStart` flag is `true` only for the first `<mark>` element created for a given range, which is the one you want to scroll to. The `className` assignment applies a custom CSS class to every mark element that belongs to the highlighted line.
+
+## Multiple line ranges
+
+You can pass multiple range objects to highlight several lines or ranges of lines in a single call. For example, to highlight lines 5 through 10 (six lines total):
+
+```js
+const instance = new Mark(document.querySelector('pre'));
+
+instance.markRanges([{ start: 5, length: 6 }], {
+  markLines: true
+});
+```
+
+To highlight two separate, non-contiguous ranges — for example lines 2–3 and lines 8–10:
+
+```js
+instance.markRanges(
+  [
+    { start: 2, length: 2 },
+    { start: 8, length: 3 }
+  ],
+  { markLines: true }
+);
+```
+
+Each object in the array is processed independently, so you can mix single-line and multi-line ranges freely in the same call.
+
+## Combining with wrapAllRanges
+
+Adding `wrapAllRanges: true` lets you highlight **overlapping or nested** line ranges without one range cancelling out another. This is useful when you need to apply multiple independent highlight layers to the same lines — for example, a background highlight for "selected" lines and a separate highlight for "changed" lines that partially overlap:
+
+```js
+const ranges = [
+  { start: 1, length: 10 },
+  { start: 4, length: 3, nested: true }
+];
+
+instance.markRanges(ranges, {
+  markLines: true,
+  wrapAllRanges: true,
+  each: (markElement, range) => {
+    if (range.nested) {
+      markElement.className = 'mark-nested';
+    }
+  }
+});
+```
+
+The inner range (lines 4–6) will be wrapped inside the outer range (lines 1–10), allowing each to be styled independently via CSS.

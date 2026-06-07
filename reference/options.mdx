@@ -1,0 +1,307 @@
+---
+title: "Options Reference for advanced-mark.js"
+sidebarTitle: "Options"
+description: "Complete reference for all shared and per-method options available in advanced-mark.js, including mark, markRegExp, markRanges, and unmark."
+---
+
+Each method in advanced-mark.js accepts an optional options object as its last argument. Some options are **common** — shared across all four methods (`mark`, `markRegExp`, `markRanges`, `unmark`) — while others are specific to a single method. All options are optional; sensible defaults are provided for every property.
+
+---
+
+## Common Options
+
+These options are accepted by `mark()`, `markRegExp()`, `markRanges()`, and `unmark()`.
+
+<ParamField body="element" type="string" default="'mark'">
+  The HTML tag name used to wrap matched text. Defaults to the native `<mark>` element. Any valid HTML tag name is accepted, e.g. `'span'`.
+</ParamField>
+
+<ParamField body="className" type="string" default="''">
+  A CSS class added to every generated mark element. Useful for targeting marks with stylesheets without affecting other `<mark>` elements on the page.
+</ParamField>
+
+<ParamField body="exclude" type="string | string[]" default="[]">
+  One or more CSS selectors. Any element matching a selector — and all of its descendants — is skipped during the search. Useful when a context container holds sub-elements that should not be highlighted.
+
+  ```js
+  new Mark('section').mark('Lorem', {
+    // skip the last paragraph and all its children
+    exclude: ['p:last-child', 'p:last-child *'],
+  });
+  ```
+</ParamField>
+
+<ParamField body="iframes" type="boolean | object" default="false">
+  When `true`, the library also searches inside `<iframe>` documents that share the same origin. Pass an object to inject a custom style into the iframe's `<head>` (useful for styling `<mark>` elements or Highlight API pseudo-elements inside frames).
+
+  <Expandable title="Object form">
+    <ParamField body="style" type="string">
+      A CSS string injected as a `<style data-markjs>` element inside the iframe `<head>`. The style is injected regardless of whether any matches are found. Calling `unmark()` with `iframes: { style: 'any string' }` removes the injected style.
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+<ParamField body="iframesTimeout" type="number" default="5000">
+  Maximum time in milliseconds to wait for an iframe's document to load before giving up. Only relevant when `iframes` is enabled.
+</ParamField>
+
+<ParamField body="shadowDOM" type="boolean | object" default="undefined">
+  When `true`, the library searches inside open shadow roots (`mode: 'open'`) that already exist in the context. Pass an object to inject a custom style into each shadow root.
+
+  <Expandable title="Object form">
+    <ParamField body="style" type="string">
+      A CSS string injected as a `<style data-markjs>` element appended to the shadow root's child nodes. Calling `unmark()` with `shadowDOM: { style: 'any string' }` removes the injected style.
+
+      <Warning>
+        Inline styles set via the `each` callback are **not** supported when using the CSS Custom Highlight API. Use the `style` property instead.
+      </Warning>
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+<ParamField body="highlight" type="Highlight" default="undefined">
+  A browser [`Highlight`](https://developer.mozilla.org/en-US/docs/Web/API/Highlight) object. When provided, the library uses the **CSS Custom Highlight API** instead of wrapping matches in DOM elements — `StaticRange`/`Range` objects are created and added to the `Highlight`, which is then registered in the `HighlightRegistry`. If the browser does not support the Highlight API, the library falls back to DOM element wrapping automatically.
+
+  <Note>
+    When the Highlight API is active, the first parameter of the `each` callback is a `StaticRange` or `Range` object rather than an HTML element.
+  </Note>
+
+  ```js
+  let highlight;
+  if (typeof Highlight !== 'undefined') {
+    highlight = new Highlight();
+  }
+  new Mark(ctx).mark(['lorem', 'ipsum'], {
+    highlight,
+    highlightName: 'my-highlight',
+  });
+  ```
+  ```css
+  ::highlight(my-highlight) {
+    background-color: yellow;
+  }
+  ```
+</ParamField>
+
+<ParamField body="highlightName" type="string" default="'advanced-markjs'">
+  The name under which the `Highlight` object is registered in the `HighlightRegistry`. Used as the argument to the `::highlight()` CSS pseudo-element.
+</ParamField>
+
+<ParamField body="staticRanges" type="boolean" default="true">
+  Controls whether `StaticRange` or mutable `Range` objects are created when using the Highlight API. `StaticRange` objects are preferred for performance: splitting text nodes during a subsequent DOM-wrapping pass forces the browser to re-calculate layouts and re-render all existing `Range`-based highlights. Set to `false` only when you need live ranges that update after DOM mutations.
+</ParamField>
+
+<ParamField body="rangeAcrossElements" type="boolean" default="true">
+  When using the Highlight API together with `acrossElements: true`, setting this to `true` creates a **single** `StaticRange`/`Range` that spans the entire cross-element match. When `false`, one range object is created per text node that contributes to the match (mirroring the number of DOM mark elements that would have been created).
+
+  <Note>
+    When `rangeAcrossElements: true`, the first parameter of the `filter` callback is an **array** of `Text` nodes rather than a single node.
+  </Note>
+</ParamField>
+
+<ParamField body="debug" type="boolean" default="false">
+  Outputs internal diagnostic messages to the console (or the object supplied via `log`). Enable during development to trace how terms are matched.
+</ParamField>
+
+<ParamField body="log" type="object" default="window.console">
+  A custom logger object that receives debug messages. Must expose at least a `log` and a `warn` method. Defaults to the browser `console`.
+</ParamField>
+
+<ParamField body="done" type="callback">
+  Called once after the method has finished. Signature varies per method:
+
+  - `mark()` — `(totalMarks: number, totalMatches: number, termStats: TermStats) => void`
+  - `markRegExp()` — `(totalMarks: number, totalMatches: number) => void`
+  - `markRanges()` — `(totalMarks: number, totalRanges: number) => void`
+  - `unmark()` — `() => void`
+</ParamField>
+
+<ParamField body="each" type="callback">
+  Invoked once for every marked element (or `StaticRange`/`Range` when using the Highlight API). Use it to apply custom attributes, classes, or styles. Set `eachInfo.abort = true` inside the callback to stop processing immediately.
+</ParamField>
+
+<ParamField body="noMatch" type="callback">
+  Called with the term(s) or range(s) for which no match was found. Useful for logging or UI feedback.
+</ParamField>
+
+<ParamField body="filter" type="callback">
+  Called for every potential match **before** it is marked, allowing you to accept or reject individual results. Return `false` to skip the match. Set `filterInfo.abort = true` to halt the entire run early.
+</ParamField>
+
+---
+
+## mark() Options
+
+These options apply only to the `mark()` method.
+
+<ParamField body="separateWordSearch" type="boolean | 'preserveTerms'" default="true">
+  Controls how multi-word search strings are handled.
+
+  - `true` — each whitespace-separated word is searched independently.
+  - `false` — the entire string (including spaces) is treated as a single phrase.
+  - `'preserveTerms'` — words surrounded by double quotes are kept intact; remaining words are split. This lets you highlight `"exact phrase"` alongside individual keywords in a single call.
+</ParamField>
+
+<ParamField body="diacritics" type="boolean" default="true">
+  When `true`, letters with diacritical marks (accents, umlauts, etc.) are treated as equivalent to their base characters, so searching for `"resume"` also matches `"résumé"`.
+</ParamField>
+
+<ParamField body="caseSensitive" type="boolean" default="false">
+  When `true`, the search is case-sensitive. By default matching is case-insensitive.
+</ParamField>
+
+<ParamField body="accuracy" type="string | AccuracyObject" default="'partially'">
+  Controls how strictly a term must align with word boundaries.
+
+  | Value | Behavior |
+  |---|---|
+  | `'partially'` | Matches anywhere inside a text node — the most permissive mode. |
+  | `'exactly'` | The match must begin and end at a word boundary (start/end of text node or a built-in boundary character). |
+  | `'startsWith'` | The match must begin at a word boundary but may end anywhere (mid-word). |
+  | `'complementary'` | The match may begin anywhere but must end at a word boundary. |
+
+  **Built-in boundary characters:** whitespace and ``!"#$%&'()*+,-./:;<=>?@[\]^_{|}~¡¿``
+
+  Pass an `AccuracyObject` to supply custom boundary characters instead of the built-in set:
+
+  <Expandable title="AccuracyObject">
+    <ParamField body="value" type="'exactly' | 'startsWith' | 'complementary'" required>
+      The base accuracy mode to apply.
+    </ParamField>
+    <ParamField body="limiters" type="string | string[]" required>
+      Custom word boundary characters, e.g. `",.;:?!'\\"()"`.
+    </ParamField>
+  </Expandable>
+
+  ```js
+  new Mark(ctx).mark('lorem', {
+    accuracy: { value: 'exactly', limiters: [',', '.', '!', '?'] },
+  });
+  ```
+</ParamField>
+
+<ParamField body="synonyms" type="object" default="{}">
+  A plain object mapping search terms to one or more synonyms. Keys and values are substituted in the generated pattern so both forms are highlighted. 
+
+  <Warning>
+    Synonyms are applied by string substitution across the entire search input — both keys and values are replaced wherever they appear, including inside other words.
+  </Warning>
+
+  ```js
+  new Mark(ctx).mark('color', {
+    synonyms: { color: 'colour' },
+  });
+  ```
+</ParamField>
+
+<ParamField body="ignoreJoiners" type="boolean" default="false">
+  When `true`, zero-width joiners (`\u00ad`, `\u200b`, `\u200c`, `\u200d`) between characters are ignored during matching, so `"lo​rem"` (with a zero-width space) still matches `"lorem"`.
+</ParamField>
+
+<ParamField body="ignorePunctuation" type="string | string[]" default="[]">
+  Characters to treat as optional during matching. A punctuation character listed here is allowed to appear between any two characters in the search term without preventing a match.
+</ParamField>
+
+<ParamField body="wildcards" type="'disabled' | 'enabled' | 'withSpaces'" default="'disabled'">
+  Enables wildcard characters in the search string.
+
+  | Value | Behavior |
+  |---|---|
+  | `'disabled'` | No wildcard processing; `*` and `?` are treated literally. |
+  | `'enabled'` | `*` matches zero or more non-whitespace characters; `?` matches exactly one non-whitespace character. |
+  | `'withSpaces'` | Same as `'enabled'` but `*` also matches whitespace. |
+</ParamField>
+
+<ParamField body="acrossElements" type="boolean" default="false">
+  When `true`, the library aggregates all text node contents within the context into a single string (inserting a space at block-element boundaries when the adjacent text nodes are not naturally separated) and searches within that string. This allows a single term to match text that spans multiple sibling HTML elements.
+
+  <Note>
+    Matches that cross block-element boundaries are usually undesirable. Use `blockElementsBoundary` to constrain matches to within individual block elements.
+  </Note>
+</ParamField>
+
+<ParamField body="blockElementsBoundary" type="boolean | BoundaryObject" default="undefined">
+  Limits `acrossElements` matches so they cannot cross block-element boundaries. When `true`, the built-in set of block elements is used. Pass an object for fine-grained control.
+
+  <Expandable title="BoundaryObject">
+    <ParamField body="tagNames" type="string[]">
+      An explicit list of tag names to treat as boundaries. When provided, replaces the built-in block-element list.
+    </ParamField>
+    <ParamField body="extend" type="boolean">
+      When `true`, the list in `tagNames` is **added to** the built-in list rather than replacing it.
+    </ParamField>
+    <ParamField body="char" type="string">
+      The character inserted at each boundary in the aggregated string. Defaults to a space (`' '`).
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+<ParamField body="combineBy" type="number" default="100">
+  Controls how many individual terms from the search array are combined into a single RegExp pattern per matching pass.
+
+  - `combineBy: 100` (default) — up to 100 terms per pattern, so an array of 50 strings requires a single pass.
+  - `combineBy: 1` — each term is processed individually (equivalent to the old pre-v3 default behavior).
+  - `Infinity` — always creates one combined pattern regardless of array length.
+
+  <Note>
+    Very large combined patterns can be slow and may exceed the browser's RegExp size limit. Tune this value when highlighting thousands of terms. A single combined pattern also prevents highlighting inside already-highlighted elements.
+  </Note>
+</ParamField>
+
+---
+
+## markRegExp() Options
+
+These options apply only to the `markRegExp()` method.
+
+<ParamField body="ignoreGroups" type="number" default="0">
+  The number of leading capturing groups in the RegExp to skip. Matched text from skipped groups is not marked. Useful when a leading group is needed structurally (e.g. a look-behind workaround) but should not itself be highlighted.
+</ParamField>
+
+<ParamField body="separateGroups" type="boolean" default="false">
+  When `true`, each capturing group within a match is marked as an independent element instead of the entire match being marked as one unit.
+
+  <Warning>
+    `separateGroups` requires the `d` (indices) flag on the RegExp: `/pattern/gd`. Regexps without the `d` flag are not supported in v3.
+  </Warning>
+</ParamField>
+
+<ParamField body="wrapAllRanges" type="boolean" default="undefined">
+  When `true`, overlapping or nested matches within the same text node are all marked, rather than only the first match being applied. Useful when capturing groups can overlap.
+</ParamField>
+
+<ParamField body="acrossElements" type="boolean" default="false">
+  Same as [`acrossElements`](#mark-options) in `mark()` — aggregates all context text into a single string for matching purposes.
+
+  <Warning>
+    The `g` flag is required on the RegExp. If missing, advanced-mark.js v3 will recompile the RegExp with `g` added and emit a console warning.
+  </Warning>
+</ParamField>
+
+<ParamField body="blockElementsBoundary" type="boolean | BoundaryObject" default="undefined">
+  Identical to the [`blockElementsBoundary`](#mark-options) option in `mark()`. Limits cross-element matches to within block-element boundaries when `acrossElements` is enabled.
+</ParamField>
+
+---
+
+## markRanges() Options
+
+These options apply only to the `markRanges()` method.
+
+<ParamField body="wrapAllRanges" type="boolean" default="undefined">
+  When `true`, overlapping or nested character ranges are all marked. When `false` (the default), later ranges that overlap an already-marked range are ignored.
+</ParamField>
+
+<ParamField body="markLines" type="boolean" default="undefined">
+  When `true`, ranges are interpreted as **line** positions rather than character positions within the aggregated text content. Enables marking entire lines by line number.
+</ParamField>
+
+---
+
+## unmark() Options
+
+`unmark()` accepts a subset of the common options (`element`, `className`, `exclude`, `iframes`, `iframesTimeout`, `shadowDOM`, `highlight`, `debug`, `log`, `done`) plus the following:
+
+<ParamField body="highlightName" type="string | string[]">
+  The name (or array of names) of Highlight API highlights to remove from the `HighlightRegistry`. When omitted, all highlights registered by advanced-mark.js are cleared.
+</ParamField>

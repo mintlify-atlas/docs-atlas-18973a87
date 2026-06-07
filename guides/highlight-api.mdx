@@ -1,0 +1,144 @@
+---
+title: "Using the CSS Custom Highlight API with advanced-mark.js"
+sidebarTitle: "CSS Highlight API"
+description: "Use the highlight option to leverage the native browser CSS Custom Highlight API, styling text ranges without DOM wrapping for significantly faster highlighting."
+---
+
+The [CSS Custom Highlight API](https://developer.mozilla.org/en-US/docs/Web/API/CSS_Custom_Highlight_API) allows browsers to style arbitrary text ranges without inserting any new DOM elements. advanced-mark.js supports this API natively: instead of wrapping matched text in `<mark>` elements, it registers `StaticRange` or `Range` objects with the browser's highlight registry, leaving the DOM completely untouched. This is significantly faster for large documents because it eliminates DOM mutations and the reflow they trigger.
+
+## How it works
+
+When a `Highlight` object is passed via the `highlight` option, advanced-mark.js:
+
+1. Creates `StaticRange` (or `Range`) objects for every match it finds.
+2. Adds those range objects to the provided `Highlight` instance.
+3. Registers the `Highlight` instance with `CSS.highlights` under the name given by `highlightName` once all matches have been processed.
+
+No `<mark>` elements are created. The visual highlight is rendered entirely by the browser using a CSS `::highlight()` pseudo-element rule that you define in your stylesheet.
+
+## Basic usage
+
+Check for browser support before constructing the `Highlight` object, then pass it to any `mark()`, `markRegExp()`, or `markRanges()` call:
+
+```js
+let highlight;
+
+// Check whether the browser supports the Highlight API
+if (typeof Highlight !== 'undefined') {
+  highlight = new Highlight();
+}
+
+new Mark(ctx).mark(searchTerms, {
+  highlight: highlight,
+  highlightName: 'my-highlight'
+});
+```
+
+Then add the corresponding `::highlight()` rule to your CSS:
+
+```css
+::highlight(my-highlight) {
+  background-color: yellow;
+  color: black;
+}
+```
+
+If `highlight` is `undefined` (i.e. the browser does not support the API), advanced-mark.js automatically falls back to wrapping matches in HTML elements, so your code works in all browsers without any additional branching.
+
+<Note>
+  When the Highlight API is active, the `each` callback receives a `StaticRange` or `Range` object as its first parameter instead of an `HTMLElement`. Keep this in mind if you use the callback to attach classes, attributes, or data properties — those operations are not applicable to range objects.
+</Note>
+
+## StaticRange vs Range
+
+By default (`staticRanges: true`), advanced-mark.js creates `StaticRange` objects. Static ranges are lightweight snapshots that do not update when the DOM changes, making them significantly faster to create and store.
+
+```js
+instance.mark(searchTerms, {
+  highlight: myHighlight,
+  highlightName: 'my-highlight',
+  staticRanges: true // default — recommended
+});
+```
+
+You can switch to live `Range` objects by setting `staticRanges: false`, but be aware of a serious performance caveat:
+
+```js
+instance.mark(searchTerms, {
+  highlight: myHighlight,
+  highlightName: 'my-highlight',
+  staticRanges: false // uses Range objects
+});
+```
+
+<Warning>
+  Setting `staticRanges: false` can cause **severe performance degradation** if a subsequent run uses DOM wrapping (i.e. does not use the Highlight API). When the library wraps matches in HTML elements it splits text nodes, and this forces the browser to recalculate every live `Range` object in the highlight registry. Use `StaticRange` objects (the default) to avoid this issue.
+</Warning>
+
+## rangeAcrossElements
+
+When `acrossElements: true` is set alongside the Highlight API, the `rangeAcrossElements` option (default `true`) controls whether a single range object is created for a match that spans multiple elements, or whether one range object is created per element:
+
+```js
+instance.mark(searchTerms, {
+  acrossElements: true,
+  highlight: myHighlight,
+  highlightName: 'my-highlight',
+  rangeAcrossElements: true // default: one range per match, even across elements
+});
+```
+
+Setting `rangeAcrossElements: false` produces one `StaticRange`/`Range` per element touched by a match (equivalent to the number of `<mark>` elements that would have been created):
+
+```js
+instance.mark(searchTerms, {
+  acrossElements: true,
+  highlight: myHighlight,
+  highlightName: 'my-highlight',
+  rangeAcrossElements: false // one range per element
+});
+```
+
+This is useful for compatibility scenarios where downstream code expects a one-to-one correspondence between matches and range objects. Note that when `rangeAcrossElements: true`, the `filter` callback's first parameter is an **array** of text nodes rather than a single text node.
+
+<Note>
+  `markRanges()` does not require `acrossElements` to produce cross-element ranges — it handles element boundaries automatically regardless of this option.
+</Note>
+
+## Highlight API with iframes and shadow DOM
+
+To apply custom highlight styles inside iframes or shadow roots when using the Highlight API, add the `::highlight()` rule to the respective `style` option:
+
+```js
+instance.mark(searchTerms, {
+  highlight: myHighlight,
+  highlightName: 'my-highlight',
+  iframes: {
+    style: '::highlight(my-highlight) { background-color: yellow; }'
+  },
+  shadowDOM: {
+    style: '::highlight(my-highlight) { background-color: yellow; }'
+  }
+});
+```
+
+The library injects a `<style data-markjs>` element into each iframe's `<head>` and at the end of each shadow root's child nodes, scoping the `::highlight()` rule to those environments.
+
+## Removing highlights
+
+Pass the same `Highlight` object and `highlightName` to `unmark()` to clear the registered highlight:
+
+```js
+instance.unmark({
+  highlight: myHighlight,
+  highlightName: 'my-highlight'
+});
+```
+
+This removes the `Highlight` entry from `CSS.highlights` and clears all range objects from it, effectively removing all visual highlights from the page.
+
+## Browser support
+
+The CSS Custom Highlight API is supported in modern Chromium-based browsers and Safari 17.2+. Firefox support is under active development.
+
+advanced-mark.js handles missing support gracefully: if `typeof Highlight === 'undefined'`, the `Highlight` object you pass will be `undefined`, and the library will automatically fall back to wrapping matches in HTML elements using its standard DOM-based approach. No code changes are required to support both paths.

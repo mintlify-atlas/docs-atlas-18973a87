@@ -1,0 +1,221 @@
+---
+title: "Compatibility and Migration from mark.js v2"
+sidebarTitle: "Compatibility"
+description: "Browser compatibility, JSDOM support, and a complete guide to migrating from mark.js or advanced-mark.js v2.x to advanced-mark.js v3."
+---
+
+advanced-mark.js v3 introduces several breaking changes from v2.x and from the original mark.js library. This page covers browser requirements, virtual DOM support, and a step-by-step migration guide for both upgrade paths.
+
+---
+
+## Browser requirements
+
+advanced-mark.js v3 targets **modern evergreen browsers** (Chrome, Firefox, Safari, Edge). Support for very old browsers (including IE11) was dropped in v3.
+
+The **CSS Custom Highlight API** (`highlight` option) is used as a progressive enhancement: when the browser does not expose a global `Highlight` constructor, the library automatically falls back to wrapping matches in DOM elements. No code changes are required to support both cases.
+
+```js
+// Safe pattern — works in all browsers
+let highlight;
+if (typeof Highlight !== 'undefined') {
+  highlight = new Highlight();
+}
+
+new Mark(ctx).mark('lorem', {
+  highlight,              // undefined in older browsers → DOM wrapping
+  highlightName: 'demo',
+});
+```
+
+---
+
+## JSDOM support
+
+advanced-mark.js supports virtual DOM environments such as **JSDOM** (used by Jest, Node.js scripts, and SSR toolchains). Because JSDOM does not provide a global `window`, you must pass your JSDOM window object explicitly via the `window` option:
+
+```js
+import { JSDOM } from 'jsdom';
+import Mark from 'advanced-mark.js';
+
+const dom = new JSDOM('<!DOCTYPE html><article>Lorem ipsum</article>');
+
+new Mark(dom.window.document.querySelector('article')).mark('lorem', {
+  window: dom.window,
+  done(totalMarks) {
+    console.log(`${totalMarks} marks created in JSDOM`);
+  },
+});
+```
+
+---
+
+## Migrating from v2.x to v3
+
+<Warning>
+  The changes below are **breaking**. Review each item before upgrading to ensure your integration continues to work correctly.
+</Warning>
+
+<AccordionGroup>
+
+<Accordion title="1. combineBy is now the default (formerly combinePatterns)">
+  In v2, terms were highlighted one at a time by default. In v3, **`combineBy: 100` is the default** — terms are batched into combined RegExp patterns (up to 100 terms per pattern), drastically reducing the number of matching passes for large arrays.
+
+  The old option name `combinePatterns` is still accepted for backward compatibility, but `combineBy` is preferred.
+
+  **If your code relied on single-term-at-a-time processing** (e.g. relying on insertion order of mark elements matching exactly the array order, or avoiding highlights inside already-highlighted text), set `combineBy: 1`:
+
+  ```js
+  // v2 default behavior — process one term at a time
+  new Mark(ctx).mark(['term1', 'term2', 'term3'], {
+    combineBy: 1,
+  });
+  ```
+
+  <Note>
+    A single combined pattern also prevents highlighting inside already-highlighted elements. If you need nested highlighting, use `combineBy: 1`.
+  </Note>
+</Accordion>
+
+<Accordion title="2. Aborting execution: info.abort instead of info.execution.abort">
+  In v2, the `filter` and `each` callbacks received an `info` object with a nested `execution` sub-object. Aborting required:
+
+  ```js
+  // v2 — no longer works
+  filter(node, term, count, info) {
+    if (count >= 10) {
+      info.execution.abort = true;
+    }
+    return true;
+  }
+  ```
+
+  In v3, the `execution` wrapper is removed. Set `abort` directly on the `info` object:
+
+  ```js
+  // v3 — correct
+  filter(node, term, totalMatchesSoFar, termMatchesSoFar, filterInfo) {
+    if (totalMatchesSoFar >= 10) {
+      filterInfo.abort = true;
+    }
+    return true;
+  }
+  ```
+
+  The same change applies to the `each` callback's info parameter.
+
+  <Warning>
+    Code that still references `info.execution.abort` will silently fail to abort — the property path resolves to `undefined` rather than throwing an error, so this bug may be difficult to notice.
+  </Warning>
+</Accordion>
+
+<Accordion title="3. separateGroups now requires the d flag">
+  In v2, `separateGroups: true` worked with any RegExp. In v3, **the `d` (indices) flag is required** because the library uses `RegExp.prototype.hasIndices` to calculate group positions efficiently.
+
+  ```js
+  // v2 — worked without d flag
+  new Mark(ctx).markRegExp(/(lorem)|(ipsum)/g, { separateGroups: true });
+
+  // v3 — d flag is required
+  new Mark(ctx).markRegExp(/(lorem)|(ipsum)/gd, { separateGroups: true });
+  ```
+
+  `RegExp.prototype.hasIndices` (the `d` flag) is [well established across modern browsers](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/RegExp/hasIndices#browser_compatibility). If you must support browsers that lack `d` flag support, you cannot use `separateGroups` in v3.
+
+  <Warning>
+    Passing a RegExp without the `d` flag when `separateGroups: true` is set will not produce an error, but groups **will not be marked separately** — the entire match is treated as a single unit.
+  </Warning>
+</Accordion>
+
+<Accordion title="4. markRegExp() now requires the g flag">
+  Prior to v3, passing a RegExp without the `g` flag to `markRegExp()` could produce incorrect results in certain patterns (e.g. look-behind workarounds that return empty matches would break the execution loop, causing subsequent matches to be missed).
+
+  In v3, the `g` flag is **required** for correct behaviour. For backward compatibility, if the `g` flag is absent, advanced-mark.js **recompiles the RegExp** with `g` added and emits a console warning:
+
+  ```
+  advanced-mark.js: markRegExp requires the g flag. Recompiling with /g.
+  ```
+
+  Update your RegExps to include `g` to silence the warning and avoid any future deprecation:
+
+  ```js
+  // v2 — worked but could produce incorrect results
+  new Mark(ctx).markRegExp(/lorem/i);
+
+  // v3 — correct
+  new Mark(ctx).markRegExp(/lorem/gi);
+  ```
+</Accordion>
+
+<Accordion title="5. cacheTextNodes option removed">
+  The `cacheTextNodes` option that existed in earlier v2 builds is **removed in v3**. It provided a small performance gain but was not compatible with several other options and added complexity that conflicted with CSS Custom Highlight API support.
+
+  Remove any `cacheTextNodes` references from your options objects — the property is silently ignored if present, but relying on the caching behaviour it provided is no longer possible.
+
+  ```js
+  // v2 — no longer has any effect
+  new Mark(ctx).mark('lorem', {
+    cacheTextNodes: true, // remove this line
+  });
+  ```
+</Accordion>
+
+<Accordion title="6. offset property removed from filter callback">
+  In v2, the `filter` callback's info object included an `offset` property indicating the character position of the current match within its text node. This property is **removed in v3**.
+
+  If your code reads `info.offset` (or `filterInfo.offset`) inside a `filter` callback, those reads will return `undefined`. You can derive positional information from the `match` property (`match.index`) when needed:
+
+  ```js
+  // v2 — offset was available
+  filter(node, term, count, info) {
+    console.log(info.offset); // no longer available in v3
+    return true;
+  }
+
+  // v3 — use match.index instead
+  filter(node, term, totalSoFar, termSoFar, filterInfo) {
+    console.log(filterInfo.match.index); // character index in the source string
+    return true;
+  }
+  ```
+
+  <Note>
+    If your use-case depended heavily on `offset`, you will need to stay on advanced-mark.js v2. See the [CHANGELOG](https://github.com/angezid/advanced-mark.js/blob/main/CHANGELOG.md) for v2 release history.
+  </Note>
+</Accordion>
+
+</AccordionGroup>
+
+---
+
+## Migrating from mark.js
+
+advanced-mark.js is a **superset of the original [mark.js](https://github.com/julmot/mark.js)** library. The core API (`mark()`, `markRegExp()`, `markRanges()`, `unmark()`) and all original options are preserved, so most codebases can switch by replacing the package name:
+
+```diff
+- import Mark from 'mark.js';
++ import Mark from 'advanced-mark.js';
+```
+
+The jQuery plugin namespace is identical:
+
+```diff
+- import 'mark.js/dist/jquery.mark.js';
++ import 'advanced-mark.js/dist/jquery.mark.js';
+```
+
+Key additions in advanced-mark.js that do not exist in mark.js include:
+
+- **CSS Custom Highlight API** support (`highlight`, `highlightName`, `staticRanges`, `rangeAcrossElements`)
+- **Shadow DOM** traversal (`shadowDOM`)
+- **`separateWordSearch: 'preserveTerms'`** — preserve quoted phrases while splitting other words
+- **`accuracy: 'startsWith'`** — new accuracy mode
+- **`wildcards: 'withSpaces'`** — wildcards that match across whitespace
+- **`markLines`** option in `markRanges()` for line-based ranges
+- **`wrapAllRanges`** for overlapping range/group marking
+- **`combineBy`** (formerly `combinePatterns`) — batch term processing
+- **JSDOM support** via the `window` option
+- **Abort-on-demand** via `info.abort = true` in `filter` and `each` callbacks
+
+<Note>
+  The `RegExpCreator` module that was previously exported from advanced-mark.js v2 has been **removed from the npm package** in v3. If you imported it directly, you will need to copy the relevant source or pin to v2.
+</Note>

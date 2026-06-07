@@ -1,0 +1,133 @@
+---
+title: "advanced-mark.js: DOM Text Highlighting Library"
+sidebarTitle: "Introduction"
+description: "advanced-mark.js is a fast, zero-dependency JavaScript library for highlighting text in the browser DOM, built as an advanced fork of mark.js with CSS Custom Highlight API support."
+---
+
+advanced-mark.js is a fast, zero-dependency JavaScript library that highlights any text directly in the browser DOM. Where the original mark.js left off, advanced-mark.js picks up — adding CSS Custom Highlight API support, Shadow DOM and iframe traversal, virtual DOM compatibility (JSDOM), and a significantly expanded option set, all while remaining pure Vanilla JavaScript with no external dependencies.
+
+## What is advanced-mark.js?
+
+advanced-mark.js is an advanced fork of the popular [mark.js](https://markjs.io/) library, rewritten and extended for modern browser environments. At its core, it walks the DOM tree within a given context, finds text that matches your search terms or patterns, and wraps those matches in `<mark>` elements (or applies CSS Custom Highlights without touching the DOM at all).
+
+**Key features include:**
+
+- **Pure Vanilla JavaScript** — no jQuery or any other runtime dependency required
+- **CSS Custom Highlight API** — highlight text visually without inserting DOM elements, using the browser's native [`Highlight`](https://developer.mozilla.org/en-US/docs/Web/API/Highlight) interface as a progressive enhancement
+- **Shadow DOM support** — traverse and highlight inside shadow roots
+- **iframe support** — search and highlight across embedded iframes
+- **Virtual DOM support** — works with JSDOM and similar environments for server-side or test use cases
+- **Diacritics support** — match accented characters and their base equivalents
+- **Highly customizable** — accuracy modes, synonyms, wildcards, block element boundaries, custom filters, and more
+
+<Tip>
+  Explore the [Playground](https://angezid.github.io/advanced-mark.js/playground-v3) to see highlighting options in action, and the [Performance page](https://angezid.github.io/advanced-mark.js/performance-v3) to see how the library scales.
+</Tip>
+
+## Core API Methods
+
+The entire public surface of advanced-mark.js consists of four methods, all called on a `Mark` instance:
+
+<CardGroup cols={2}>
+  <Card title="mark()" icon="highlighter" href="/api/mark">
+    Highlight one or more plain-text search terms inside a context. Supports
+    word splitting, accuracy modes, diacritics, synonyms, wildcards, and more.
+  </Card>
+  <Card title="markRegExp()" icon="brackets-curly" href="/api/mark-regexp">
+    Highlight matches for a custom regular expression. Supports capture groups,
+    across-element matching, and separate group wrapping.
+  </Card>
+  <Card title="markRanges()" icon="arrows-left-right" href="/api/mark-ranges">
+    Highlight arbitrary character ranges specified as `{ start, length }` objects.
+    Also supports line-based ranges via the `markLines` option.
+  </Card>
+  <Card title="unmark()" icon="eraser" href="/api/unmark">
+    Remove all highlights created by advanced-mark.js and normalize the
+    surrounding text nodes back to their original state.
+  </Card>
+</CardGroup>
+
+## Basic Usage
+
+```js
+// Create an instance targeting a DOM context
+const instance = new Mark(document.querySelector('article'));
+
+// Highlight all occurrences of "lorem ipsum"
+instance.mark('lorem ipsum', {
+  separateWordSearch: true,
+});
+```
+
+```css
+/* Style the highlighted elements */
+mark {
+  background-color: yellow;
+  color: black;
+}
+```
+
+## Distribution Files
+
+The `dist/` directory ships four flavors of the library to suit different module systems and bundler setups:
+
+### JavaScript (Vanilla)
+
+| File | Format | Description |
+|---|---|---|
+| `mark.js` | UMD | Full build, for `<script>` tags and CommonJS |
+| `mark.min.js` | UMD | Minified production build |
+| `mark.es6.js` | ES Module | For bundlers and native `<script type="module">` |
+| `mark.es6.min.js` | ES Module | Minified ES module build |
+
+### jQuery Plugin
+
+| File | Format | Description |
+|---|---|---|
+| `jquery.mark.js` | UMD | jQuery plugin, full build |
+| `jquery.mark.min.js` | UMD | jQuery plugin, minified |
+| `jquery.mark.es6.js` | ES Module | jQuery plugin ES module build |
+| `jquery.mark.es6.min.js` | ES Module | jQuery plugin ES module, minified |
+
+### TypeScript Declaration Files
+
+| File | Corresponds To |
+|---|---|
+| `mark.d.ts` | `mark.js` (UMD) |
+| `mark.es6.d.ts` | `mark.es6.js` (ES module) — also the default `types` entry |
+| `jquery.mark.d.ts` | `jquery.mark.js` (UMD) |
+| `jquery.mark.es6.d.ts` | `jquery.mark.es6.js` (ES module) |
+
+<Note>
+  The package's `main` field points to `dist/mark.js` and the `types` field
+  points to `dist/mark.es6.d.ts`, so TypeScript projects using ES module
+  imports will get types automatically.
+</Note>
+
+## Browser Support
+
+advanced-mark.js supports all modern browsers. A few things to keep in mind:
+
+- **UTF-8 encoding is required.** When loading via a `<script>` tag, add the `charset="utf-8"` attribute if your page encoding is not explicitly set:
+
+  ```html
+  <script src="path/to/mark.js" charset="utf-8"></script>
+  ```
+
+- **CSS Custom Highlight API** is supported as a progressive enhancement. When the browser supports the native `Highlight` interface, advanced-mark.js can apply highlights without modifying the DOM at all. In browsers that don't support it, the library falls back transparently to wrapping matches in `<mark>` elements.
+
+- **Very old browsers** (e.g. IE11) are not supported as of v3.0.0. The library targets environments with modern JavaScript engine support.
+
+<Tip>
+  When using the CSS Custom Highlight API, style your highlights with the
+  `::highlight()` pseudo-element instead of `mark`:
+
+  ```css
+  ::highlight(advanced-markjs) {
+    background-color: yellow;
+    color: black;
+  }
+  ```
+
+  The default `Highlight` object name is `advanced-markjs`, configurable via the `highlightName` option.
+</Tip>

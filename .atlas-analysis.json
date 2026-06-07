@@ -1,0 +1,92 @@
+{
+  "projectType": "sdk-library",
+  "projectName": "advanced-mark.js",
+  "projectDescription": "A fast JavaScript library to highlight text, words, or regular expression matches on a browser page, with support for the CSS Custom Highlight API, shadow DOM, iframes, and cross-element matching.",
+  "theme": "luma",
+  "primaryColor": "#F5A623",
+  "lightColor": "#FFF3E0",
+  "darkColor": "#B8730C",
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "Documentation",
+        "groups": [
+          {
+            "group": "Get Started",
+            "pages": [
+              "introduction",
+              "quickstart"
+            ]
+          },
+          {
+            "group": "Guides",
+            "pages": [
+              "guides/filtering-matches",
+              "guides/separate-groups",
+              "guides/nesting-overlapping",
+              "guides/elements-boundaries",
+              "guides/mark-lines",
+              "guides/shadow-dom-iframes",
+              "guides/highlight-api",
+              "guides/performance"
+            ]
+          },
+          {
+            "group": "Reference",
+            "pages": [
+              "reference/options",
+              "reference/typescript",
+              "reference/compatibility"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "API Reference",
+        "groups": [
+          {
+            "group": "Methods",
+            "pages": [
+              "api/mark",
+              "api/mark-regexp",
+              "api/mark-ranges",
+              "api/unmark"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "keyFeatures": [
+    "Highlight arbitrary text strings, arrays of terms, and regular expressions in the DOM",
+    "CSS Custom Highlight API support (StaticRange/Range objects via HighlightRegistry)",
+    "Cross-element matching with acrossElements option",
+    "Shadow DOM and iframe traversal",
+    "Block element boundary control to limit cross-element matches",
+    "Separate capturing groups highlighting with RegExp d flag",
+    "Nesting and overlapping range/group highlighting via wrapAllRanges",
+    "markLines option for line-number-based range highlighting",
+    "Diacritics, synonyms, wildcards, and ignore-joiner/punctuation options",
+    "jQuery plugin and vanilla JS builds, with TypeScript declarations",
+    "JSDOM compatibility for server-side/virtual DOM environments",
+    "Significant performance improvements over the original mark.js library"
+  ],
+  "publicApiSurface": [
+    "new Mark(context)",
+    "mark(search, options)",
+    "markRegExp(regexp, options)",
+    "markRanges(ranges, options)",
+    "unmark(options)",
+    "$(selector).mark(search, options)",
+    "$(selector).markRegExp(regexp, options)",
+    "$(selector).markRanges(ranges, options)",
+    "$(selector).unmark(options)",
+    "Mark.MarkOptions",
+    "Mark.RegExpOptions",
+    "Mark.RangesOptions",
+    "Mark.UnmarkOptions",
+    "Mark.MarkRange",
+    "Mark.AccuracyObject",
+    "Mark.BoundaryObject"
+  ]
+}

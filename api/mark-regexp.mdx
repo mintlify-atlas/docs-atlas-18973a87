@@ -1,0 +1,287 @@
+---
+title: "markRegExp() — Highlight Regular Expression Matches"
+sidebarTitle: "markRegExp()"
+description: "Highlight custom regular expression pattern matches in the DOM, with support for capture groups, cross-element search, and the CSS Custom Highlight API."
+---
+
+`markRegExp()` highlights matches for a custom regular expression. The regex must have the `g` flag; for backward compatibility it is recompiled internally with the `g` flag if missing. This method is ideal when you need pattern-based matching beyond what `mark()` supports — for example matching HTML tags, structured tokens, or capturing specific groups independently.
+
+## Syntax
+
+```js
+// Vanilla JS
+const instance = new Mark(context);
+instance.markRegExp(regexp[, options]);
+
+// jQuery
+$(selector).markRegExp(regexp[, options]);
+```
+
+## Parameters
+
+<ParamField path="regexp" type="RegExp" required>
+  The regular expression to match against the context text. **Must** include the `g` flag — the library manipulates `lastIndex` internally and requires it. If the `g` flag is absent it is recompiled automatically (backward-compatibility shim).
+
+  When using `separateGroups`, the `d` flag is also required to enable match indices (`hasIndices`).
+
+  ```js
+  // Correct: g flag present
+  const regex = /\b\w{5,}\b/gi;
+
+  // separateGroups requires g + d flags
+  const groupRegex = /(\w+)\s+(\w+)/gd;
+  ```
+</ParamField>
+
+<ParamField path="options" type="object">
+  Optional configuration object.
+
+  <Expandable title="options properties">
+
+  <ParamField path="element" type="string" default="'mark'">
+    The HTML element to wrap matches in. For example, `'span'` wraps matches in `<span>` tags instead of `<mark>`.
+  </ParamField>
+
+  <ParamField path="className" type="string" default="''">
+    A CSS class name added to every generated mark element.
+  </ParamField>
+
+  <ParamField path="exclude" type="string | string[]" default="[]">
+    A CSS selector string or array of selectors for DOM elements that should be skipped. Descendants of excluded elements are also skipped.
+  </ParamField>
+
+  <ParamField path="ignoreGroups" type="number" default="0">
+    The number of leading capture groups to skip when determining what text to highlight. The library highlights the first non-ignored group.
+
+    ```js
+    // Regex: /(-)(\\w+)\\s+/g  with ignoreGroups: 1
+    // Group 1 (-) is skipped; group 2 (\\w+) is highlighted
+    instance.markRegExp(/(-)(\w+)\s+/g, { ignoreGroups: 1 });
+    ```
+  </ParamField>
+
+  <ParamField path="separateGroups" type="boolean" default="false">
+    When `true`, each capturing group in the regex is highlighted as an independent match rather than highlighting the entire match string. Requires the `d` flag (hasIndices) on the regex.
+
+    Combine with `wrapAllRanges: true` to handle overlapping or nested groups.
+  </ParamField>
+
+  <ParamField path="acrossElements" type="boolean" default="false">
+    When `true`, the regex can match text that spans across multiple sibling or nested DOM elements. Each part of the match receives its own mark element.
+  </ParamField>
+
+  <ParamField path="wrapAllRanges" type="boolean" default="undefined">
+    Enables marking of nesting or overlapping capturing groups. Useful when `separateGroups` is `true` and groups can overlap each other within a single match.
+  </ParamField>
+
+  <ParamField path="blockElementsBoundary" type="boolean | BoundaryObject" default="undefined">
+    Limits cross-element matches so they do not cross block-level element boundaries. Only meaningful when `acrossElements` is `true`. Accepts:
+    - `true` — uses the default HTML block element set as boundaries.
+    - A `BoundaryObject` with optional properties:
+      - `tagNames` (string[]) — custom tag names to treat as boundaries.
+      - `extend` (boolean) — when `true`, adds `tagNames` to the default boundary set; otherwise only `tagNames` act as boundaries.
+      - `char` (string) — custom boundary marker character (default `\x01`).
+  </ParamField>
+
+  <ParamField path="highlight" type="Highlight" default="undefined">
+    A browser [Highlight](https://developer.mozilla.org/en-US/docs/Web/API/Highlight) object. When provided, the library uses the **CSS Custom Highlight API** instead of wrapping matches in DOM elements.
+  </ParamField>
+
+  <ParamField path="highlightName" type="string" default="'advanced-markjs'">
+    The key used to register the `Highlight` object in the `CSS.highlights` registry. Only relevant when `highlight` is provided.
+  </ParamField>
+
+  <ParamField path="staticRanges" type="boolean" default="true">
+    When using the CSS Custom Highlight API, determines whether lightweight `StaticRange` objects or live `Range` objects are created.
+  </ParamField>
+
+  <ParamField path="rangeAcrossElements" type="boolean" default="true">
+    When using the Highlight API with `acrossElements: true`, creates a single range spanning the full cross-element match (`true`) or separate per-node ranges (`false`).
+  </ParamField>
+
+  <ParamField path="shadowDOM" type="boolean | object" default="undefined">
+    When `true` or an options object, searches inside shadow DOM roots. Pass an object with a `style` property to inject CSS into shadow roots.
+  </ParamField>
+
+  <ParamField path="iframes" type="boolean | object" default="false">
+    When `true` or an options object, searches inside same-origin `<iframe>` elements. Pass an object with a `style` property to inject CSS into iframes.
+  </ParamField>
+
+  <ParamField path="iframesTimeout" type="number" default="5000">
+    Maximum time (in milliseconds) to wait for an iframe to load before skipping it.
+  </ParamField>
+
+  <ParamField path="debug" type="boolean" default="false">
+    When `true`, logs debug messages to the object specified by `log`.
+  </ParamField>
+
+  <ParamField path="log" type="object" default="window.console">
+    The object used for debug logging. Must expose `warn` and `log` methods.
+  </ParamField>
+
+  <ParamField path="filter" type="function">
+    A callback invoked for every potential match, allowing you to accept or reject it. When `acrossElements` is `true` and a match spans several nodes, the callback is called once per participating text node (FAE).
+
+    ```js
+    filter: (nodeOrArray, matchString, matchesSoFar, info) => {
+      return true; // true = highlight, false = skip
+    }
+    ```
+
+    Parameters:
+    - `nodeOrArray` (Text | Text[]) — the text node containing the match, or an array of nodes when the Highlight API is used with `acrossElements` and `rangeAcrossElements`.
+    - `matchString` (string) — the matched string:
+      1. Without `ignoreGroups` or `separateGroups` — the full regex match.
+      2. With `ignoreGroups` — the content of the first non-ignored capture group.
+      3. With `separateGroups` — the content of the current group being processed.
+    - `matchesSoFar` (number) — total number of accepted matches so far.
+    - `info` (object):
+      - `match` (RegExpExecArray) — raw result of `RegExp.exec()`.
+      - `count` (number) — number of matches already wrapped/registered _(MC)_.
+      - `matchStart` (boolean) — `true` on the first node of a cross-element match _(AE only)_.
+      - `groupIndex` (number) — index of the current capture group being highlighted _(SG only)_.
+      - `abort` (boolean) — set to `true` to stop all further processing immediately.
+
+    <Note>The `filter` and `each` callbacks share the same `info` object; updates in `filter` are visible in `each`.</Note>
+  </ParamField>
+
+  <ParamField path="each" type="function">
+    A callback invoked after each mark element is created or range is registered.
+
+    ```js
+    each: (elementOrRange, info) => {}
+    ```
+
+    Parameters:
+    - `elementOrRange` (HTMLElement | StaticRange | Range) — the created mark element or Highlight API range.
+    - `info` (object):
+      - `match` (RegExpExecArray) — raw result of `RegExp.exec()`.
+      - `count` (number) — total marks/ranges created so far _(MC)_.
+      - `matchStart` (boolean) — `true` on the first element of a cross-element match _(AE only)_.
+      - `groupIndex` (number) — index of the current capture group _(SG only)_.
+      - `groupStart` (boolean) — `true` on the first element of a cross-element group _(AE + SG only)_.
+      - `abort` (boolean) — set to `true` to stop all further processing immediately.
+  </ParamField>
+
+  <ParamField path="done" type="function">
+    A callback invoked once after all matches have been processed.
+
+    ```js
+    done: (total, totalMatches) => {}
+    ```
+
+    Parameters:
+    - `total` (number) — total number of HTML elements created or ranges registered.
+    - `totalMatches` (number) — total number of distinct regex matches found.
+  </ParamField>
+
+  <ParamField path="noMatch" type="function">
+    A callback invoked when the regex produces no matches anywhere in the context.
+
+    ```js
+    noMatch: (regex) => {}
+    ```
+
+    Parameters:
+    - `regex` (string) — the stringified representation of the regex that produced no matches.
+  </ParamField>
+
+  </Expandable>
+</ParamField>
+
+## Default Options
+
+```js
+const options = {
+  element: 'mark',
+  className: '',
+  exclude: [],
+  ignoreGroups: 0,
+  acrossElements: false,
+  wrapAllRanges: false,
+  blockElementsBoundary: false,
+
+  staticRanges: true,        // Highlight API
+  rangeAcrossElements: true, // Highlight API
+  shadowDOM: false,
+  iframes: false,
+  iframesTimeout: 5000,
+
+  filter: (textNode, matchString, matchesSoFar, filterInfo) => {
+    return true; // must return either true or false
+  },
+  each: (markElement, eachInfo) => {},
+  done: (totalMarks, totalMatches) => {},
+  noMatch: (regex) => {},
+  debug: false,
+  log: window.console,
+};
+```
+
+## Usage Examples
+
+<CodeGroup>
+
+```js Basic regex highlighting
+const instance = new Mark(document.querySelector('.content'));
+
+// Highlight 5+ letter words, case-insensitive
+instance.markRegExp(/\b\w{5,}\b/gi);
+```
+
+```js Using ignoreGroups
+const instance = new Mark(document.querySelector('.content'));
+
+// Regex has two groups; skip the first dash group, highlight the word group
+instance.markRegExp(/(-)(\w+)\s+/g, {
+  ignoreGroups: 1,
+  each: (markElement, info) => {
+    console.log('Highlighted group:', info.match[2]);
+  },
+});
+```
+
+```js Using separateGroups with the d flag
+const instance = new Mark(document.querySelector('.content'));
+
+// Highlight each capture group independently
+// The 'd' flag is required for separateGroups
+instance.markRegExp(/(\w+)\s+(\w+)/gd, {
+  separateGroups: true,
+  className: 'group-highlight',
+  each: (elementOrRange, info) => {
+    // info.groupIndex tells you which group (1-based) is being marked
+    elementOrRange.dataset.group = info.groupIndex;
+  },
+  done: (total, totalMatches) => {
+    console.log(`${totalMatches} matches, ${total} elements created.`);
+  },
+});
+```
+
+```js acrossElements with match identifier
+let matchCount = 0;
+
+const instance = new Mark(document.querySelector('.content'));
+
+instance.markRegExp(/.{3}/gi, {
+  acrossElements: true,
+  each: (markElement, info) => {
+    // Use info.count as a unique match identifier
+    markElement.setAttribute('data-markjs', info.count);
+  },
+  done: (totalMarks, totalMatches) => {
+    console.log('Total matches:', totalMatches);
+  },
+});
+```
+
+</CodeGroup>
+
+<Note>
+  **AE** — property only available when `acrossElements: true`. **SG** — property only available when `separateGroups: true`. **AE SG** — only available when both options are enabled. **MC** — count reflects matches already wrapped in HTML elements or registered as Highlight API ranges at the time the callback fires.
+</Note>
+
+<Warning>
+  The `separateGroups` option requires the `d` (hasIndices) flag on your regex. Without it, group boundary positions cannot be determined and the option will not function correctly.
+</Warning>

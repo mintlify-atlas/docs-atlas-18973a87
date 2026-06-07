@@ -1,0 +1,322 @@
+---
+title: "mark() — Highlight Text Terms in the DOM"
+sidebarTitle: "mark()"
+description: "Highlight one or more text search terms in the DOM by wrapping matches in mark elements, with rich options for accuracy, synonyms, and callbacks."
+---
+
+`mark()` highlights one or more text search terms in the DOM. It accepts a string or array of strings and wraps matches in `<mark>` elements (or your custom element). It supports diacritics, synonyms, wildcards, cross-element matches, the CSS Custom Highlight API, shadow DOM, iframes, and fine-grained control through filter, each, done, and noMatch callbacks.
+
+## Syntax
+
+```js
+// Vanilla JS
+const instance = new Mark(context);
+instance.mark(search[, options]);
+
+// jQuery
+$(selector).mark(search[, options]);
+```
+
+## Parameters
+
+<ParamField path="search" type="string | string[]" required>
+  The search term or array of terms to highlight. Terms are automatically escaped — use `markRegExp()` if you need unescaped pattern matching.
+</ParamField>
+
+<ParamField path="options" type="object">
+  Optional configuration object. All properties are optional and fall back to their defaults when omitted.
+
+  <Expandable title="options properties">
+
+  <ParamField path="element" type="string" default="'mark'">
+    The HTML element to wrap matches in. For example, set to `'span'` to use `<span>` elements instead of `<mark>`.
+  </ParamField>
+
+  <ParamField path="className" type="string" default="''">
+    A CSS class name added to every generated mark element. Useful for styling or selecting marks independently.
+  </ParamField>
+
+  <ParamField path="exclude" type="string | string[]" default="[]">
+    A CSS selector string or array of selectors for DOM elements that should be skipped during the search. Descendants of excluded elements are also excluded.
+  </ParamField>
+
+  <ParamField path="separateWordSearch" type="boolean | 'preserveTerms'" default="true">
+    Controls how multi-word terms are searched:
+    - `true` — splits each term on whitespace and searches for each word individually.
+    - `false` — searches for the full phrase as written.
+    - `'preserveTerms'` — behaves like `true` for most terms, but any term surrounded by double quotes is kept as a single phrase (e.g. `'"hello world"'` is never split).
+  </ParamField>
+
+  <ParamField path="diacritics" type="boolean" default="true">
+    When `true`, diacritic characters (e.g. accented letters) are matched interchangeably with their ASCII base characters, so searching for `"cafe"` also matches `"café"`.
+  </ParamField>
+
+  <ParamField path="caseSensitive" type="boolean" default="false">
+    When `true`, the search is case-sensitive. By default searches are case-insensitive.
+  </ParamField>
+
+  <ParamField path="accuracy" type="'partially' | 'exactly' | 'startsWith' | 'complementary' | AccuracyObject" default="'partially'">
+    Controls how strictly a term must match surrounding text:
+    - `'partially'` — the term may appear anywhere inside a word (e.g. searching `'a'` matches the `a` in `'and'`, `'back'`, and `'visa'`).
+    - `'exactly'` — the term must be a complete word, bounded by whitespace or start/end of a text node. Internally uses an AccuracyObject with default limiters.
+    - `'startsWith'` — the term must appear at the beginning of a word (e.g. `'pre'` matches `'prefix'` and `'predict'` but not `'expire'`). Built-in word boundaries are whitespace and the characters ``!"#$%&'()*+,-./:;<=>?@[\]^_{|}~¡¿``.
+    - `'complementary'` — marks the entire word containing the term (e.g. `'a'` marks the full words `'and'`, `'back'`, `'visa'`). Uses the same built-in boundaries as `'startsWith'`.
+
+    Alternatively, pass an **AccuracyObject** for custom word boundaries:
+
+    ```js
+    accuracy: {
+      value: 'exactly',       // 'exactly' | 'startsWith' | 'complementary'
+      limiters: ',.;:?!\\"\'()' // string or string[] of boundary characters
+    }
+    ```
+  </ParamField>
+
+  <ParamField path="synonyms" type="object" default="{}">
+    An object mapping terms to their synonyms so that all are highlighted together. The key and its value(s) are treated as mutual synonyms.
+
+    ```js
+    // Single synonym
+    synonyms: { 'one': '1' }
+
+    // Multiple synonyms (array form)
+    synonyms: { 'be': ['am', 'is', 'are'] }
+    ```
+  </ParamField>
+
+  <ParamField path="ignoreJoiners" type="boolean" default="false">
+    When `true`, matches are found even if the characters in the term are separated by soft hyphens (`\u00AD`), zero-width spaces (`\u200B`), zero-width non-joiners (`\u200C`), or zero-width joiners (`\u200D`).
+  </ParamField>
+
+  <ParamField path="ignorePunctuation" type="string | string[]" default="[]">
+    A string or array of punctuation characters that are ignored when matching. For example, `ignorePunctuation: ['.', '-']` allows matching `'e-mail'` when searching for `'email'`.
+  </ParamField>
+
+  <ParamField path="wildcards" type="'disabled' | 'enabled' | 'withSpaces'" default="'disabled'">
+    Enables wildcard characters `?` and `*` in search terms:
+    - `'disabled'` — `?` and `*` are treated as literal characters.
+    - `'enabled'` — `?` matches any single non-whitespace character (zero or one time); `*` matches any sequence of non-whitespace characters (zero or more times).
+    - `'withSpaces'` — `?` matches any single character including spaces; `*` matches any sequence of characters including spaces (lazy match).
+
+    Escape a wildcard with `\` to match it literally.
+  </ParamField>
+
+  <ParamField path="acrossElements" type="boolean" default="false">
+    When `true`, the search can find matches that span across multiple sibling or nested elements, such as a phrase split across a `<strong>` tag. Each part of the match receives its own mark element.
+  </ParamField>
+
+  <ParamField path="blockElementsBoundary" type="boolean | object" default="undefined">
+    Limits cross-element matches so they do not cross block-level element boundaries. Only meaningful when `acrossElements` is `true`. Accepts:
+    - `true` — uses the default set of HTML block elements as boundaries.
+    - An object with optional properties:
+      - `tagNames` (string[])   — custom HTML tag names to treat as boundaries.
+      - `extend` (boolean) — when `true`, extends the default boundary set with `tagNames`; otherwise only `tagNames` act as boundaries.
+      - `char` (string) — custom boundary character inserted at element edges (default `\x01`).
+  </ParamField>
+
+  <ParamField path="combineBy" type="number" default="100">
+    Combines this many individual term patterns into a single regular expression for better performance. Previously named `combinePatterns`.
+  </ParamField>
+
+  <ParamField path="highlight" type="Highlight" default="undefined">
+    A browser [Highlight](https://developer.mozilla.org/en-US/docs/Web/API/Highlight) object. When provided, the library uses the **CSS Custom Highlight API** instead of wrapping matches in DOM elements. The matches are registered as ranges on the `HighlightRegistry`.
+  </ParamField>
+
+  <ParamField path="highlightName" type="string" default="'advanced-markjs'">
+    The name used to register the `Highlight` object in the `CSS.highlights` registry. Only relevant when `highlight` is provided.
+  </ParamField>
+
+  <ParamField path="staticRanges" type="boolean" default="true">
+    When using the CSS Custom Highlight API, determines whether `StaticRange` objects (lighter weight, not live) or `Range` objects (live, heavier) are created for each match.
+  </ParamField>
+
+  <ParamField path="rangeAcrossElements" type="boolean" default="true">
+    When using the CSS Custom Highlight API with `acrossElements: true`, controls whether a single range spanning the full match across elements is created (`true`) or individual per-node ranges are created (`false`).
+  </ParamField>
+
+  <ParamField path="shadowDOM" type="boolean | object" default="undefined">
+    When `true` or an options object, the library searches inside shadow DOM roots attached to elements within the context. Pass an object with a `style` property to inject CSS into shadow roots.
+  </ParamField>
+
+  <ParamField path="iframes" type="boolean | object" default="false">
+    When `true` or an options object, the library searches inside same-origin `<iframe>` elements found within the context. Pass an object with a `style` property to inject CSS into iframes.
+  </ParamField>
+
+  <ParamField path="iframesTimeout" type="number" default="5000">
+    Maximum time (in milliseconds) to wait for an iframe to load before skipping it. Only relevant when `iframes` is enabled.
+  </ParamField>
+
+  <ParamField path="debug" type="boolean" default="false">
+    When `true`, logs debug messages to the object specified by `log`.
+  </ParamField>
+
+  <ParamField path="log" type="object" default="window.console">
+    The object used for logging debug messages. Must expose `warn` and `log` methods.
+  </ParamField>
+
+  <ParamField path="filter" type="function">
+    A callback invoked for every potential match, allowing you to accept or reject it. When `acrossElements` is `true` and a match spans several nodes, the callback is called once per participating text node (FAE).
+
+    ```js
+    filter: (nodeOrArray, term, matchesSoFar, termMatchesSoFar, info) => {
+      return true; // true = highlight, false = skip
+    }
+    ```
+
+    Parameters:
+    - `nodeOrArray` (Text | Text[]) — the text node containing the match, or an array of nodes when the Highlight API is used with `acrossElements` and `rangeAcrossElements`.
+    - `term` (string) — the current search term being evaluated.
+    - `matchesSoFar` (number) — total number of accepted matches across all terms so far.
+    - `termMatchesSoFar` (number) — accepted matches for the current term so far.
+    - `info` (object):
+      - `match` (RegExpExecArray) — the raw result of the internal `RegExp.exec()` call.
+      - `count` (number) — number of matches already wrapped in elements or registered as ranges.
+      - `matchStart` (boolean) — `true` on the first node of a cross-element match _(AE only)_.
+      - `abort` (boolean) — set to `true` to stop all further processing immediately.
+
+    <Note>The `filter` and `each` callbacks share the same `info` object. Properties updated in `filter` are visible in `each`.</Note>
+  </ParamField>
+
+  <ParamField path="each" type="function">
+    A callback invoked after each mark element is created (or each range is registered when using the Highlight API).
+
+    ```js
+    each: (elementOrRange, info) => {}
+    ```
+
+    Parameters:
+    - `elementOrRange` (HTMLElement | StaticRange | Range) — the created mark element, or the `StaticRange`/`Range` when using the Highlight API.
+    - `info` (object):
+      - `match` (RegExpExecArray) — result of the internal `RegExp.exec()` call.
+      - `count` (number) — total marks or ranges created so far.
+      - `matchStart` (boolean) — `true` on the first element of a cross-element match _(AE only)_.
+      - `abort` (boolean) — set to `true` to stop all further processing immediately.
+  </ParamField>
+
+  <ParamField path="done" type="function">
+    A callback invoked once after all terms have been processed.
+
+    ```js
+    done: (total, totalMatches, termStats) => {}
+    ```
+
+    Parameters:
+    - `total` (number) — total number of HTML elements created (or ranges registered).
+    - `totalMatches` (number) — total number of distinct matches found across all terms.
+    - `termStats` (object) — a map of each search term to its individual match count, e.g. `{ 'hello': 3, 'world': 1 }`.
+  </ParamField>
+
+  <ParamField path="noMatch" type="function">
+    A callback invoked for each term that produced no matches anywhere in the context.
+
+    ```js
+    noMatch: (terms) => {}
+    ```
+
+    Parameters:
+    - `terms` (string[]) — array of unmatched search terms.
+  </ParamField>
+
+  </Expandable>
+</ParamField>
+
+## Default Options
+
+```js
+const options = {
+  element: 'mark',
+  className: '',
+  separateWordSearch: true,
+  diacritics: true,
+  exclude: [],
+  caseSensitive: false,
+  accuracy: 'partially',
+  synonyms: {},
+  ignoreJoiners: false,
+  ignorePunctuation: [],
+  wildcards: 'disabled',
+
+  acrossElements: false,
+  combineBy: 100,
+  blockElementsBoundary: false,
+
+  staticRanges: true,        // Highlight API
+  rangeAcrossElements: true, // Highlight API
+  shadowDOM: false,
+  iframes: false,
+  iframesTimeout: 5000,
+
+  filter: (nodeOrArray, term, matchesSoFar, termMatchesSoFar, filterInfo) => {
+    return true; // must return either true or false
+  },
+  each: (elementOrRange, eachInfo) => {},
+  done: (total, totalMatches, termStats) => {},
+  noMatch: (term) => {},
+  debug: false,
+  log: window.console,
+};
+```
+
+## Usage Examples
+
+<CodeGroup>
+
+```js Basic usage
+const instance = new Mark(document.querySelector('.content'));
+
+// Highlight a single term
+instance.mark('hello world');
+```
+
+```js Array of terms
+const instance = new Mark(document.querySelector('.content'));
+
+// Highlight multiple terms at once
+instance.mark(['JavaScript', 'TypeScript', 'ECMAScript'], {
+  caseSensitive: false,
+  separateWordSearch: false,
+});
+```
+
+```js acrossElements with match counting
+let matchCount = 0;
+
+const instance = new Mark(document.querySelector('.content'));
+
+instance.mark(['AB CD', 'EF'], {
+  acrossElements: true,
+  each: (elemOrRange, info) => {
+    // Track total match count via info.count
+    matchCount = info.count;
+
+    // Mark the first element of each cross-element match
+    if (info.matchStart) {
+      elemOrRange.className = 'match-start';
+    }
+  },
+});
+```
+
+```js done callback with termStats
+const instance = new Mark(document.querySelector('.content'));
+
+instance.mark(['foo', 'bar', 'baz'], {
+  separateWordSearch: false,
+  done: (total, totalMatches, termStats) => {
+    console.log(`Created ${total} mark elements across ${totalMatches} matches.`);
+
+    for (const term in termStats) {
+      console.log(`"${term}" matched ${termStats[term]} time(s)`);
+    }
+  },
+  noMatch: (terms) => {
+    console.warn('No matches found for:', terms);
+  },
+});
+```
+
+</CodeGroup>
+
+<Note>
+  The abbreviation **AE** in parameter descriptions means the property is only present when `acrossElements: true` is set. **MC** means the count reflects matches already wrapped in elements or registered as Highlight API ranges at the time the callback fires.
+</Note>

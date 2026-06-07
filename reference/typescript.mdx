@@ -1,0 +1,295 @@
+---
+title: "TypeScript Types and Declarations for advanced-mark.js"
+sidebarTitle: "TypeScript"
+description: "TypeScript declaration files, import patterns, and key interfaces for advanced-mark.js — fully typed vanilla JS and jQuery plugin APIs."
+---
+
+advanced-mark.js ships TypeScript declaration files inside the `dist/` folder of the npm package. Both the vanilla JavaScript and jQuery plugin builds are covered, in both CommonJS and ES6 module flavours.
+
+---
+
+## Declaration files
+
+The following `.d.ts` files are included in `dist/`:
+
+| File | Build |
+|---|---|
+| `mark.d.ts` | Vanilla JS — CommonJS / UMD |
+| `mark.es6.d.ts` | Vanilla JS — ES6 module |
+| `jquery.mark.d.ts` | jQuery plugin — CommonJS / UMD |
+| `jquery.mark.es6.d.ts` | jQuery plugin — ES6 module |
+
+TypeScript resolves the correct declaration file automatically when you import from `'advanced-mark.js'` (maps to `mark.es6.js` + `mark.es6.d.ts`). For other builds you must supply the full path.
+
+---
+
+## Import styles
+
+<CodeGroup>
+
+```ts Vanilla JS (default ES6 module)
+// Automatically resolves to mark.es6.js + mark.es6.d.ts
+import Mark from 'advanced-mark.js';
+
+const instance = new Mark(document.querySelector('article'));
+instance.mark('lorem ipsum', {
+  caseSensitive: false,
+  separateWordSearch: true,
+});
+```
+
+```ts Other builds (full path)
+// UMD / CommonJS build — specify the full dist path
+import Mark from 'advanced-mark.js/dist/mark.js';
+
+new Mark(document.querySelector('article')).mark('lorem ipsum', {});
+```
+
+```ts jQuery plugin
+import $ from 'jquery';
+// Side-effect import — augments the jQuery prototype
+import 'advanced-mark.js/dist/jquery.mark.js';
+
+$('article').mark('lorem ipsum', {
+  separateWordSearch: true,
+  done(totalMarks) {
+    console.log(`${totalMarks} marks created`);
+  },
+});
+```
+
+</CodeGroup>
+
+---
+
+## Key interfaces
+
+All interfaces live inside the `Mark` namespace. Import the `Mark` class and access them as `Mark.MarkOptions`, `Mark.RegExpOptions`, etc.
+
+### `Mark.MarkOptions`
+
+Options for the `mark()` method.
+
+```ts
+import Mark from 'advanced-mark.js';
+
+const options: Mark.MarkOptions = {
+  element: 'mark',
+  className: 'highlight',
+  exclude: ['.no-mark'],
+  separateWordSearch: true,
+  diacritics: true,
+  caseSensitive: false,
+  accuracy: 'partially',
+  synonyms: { color: 'colour' },
+  ignoreJoiners: false,
+  ignorePunctuation: [],
+  wildcards: 'disabled',
+  acrossElements: false,
+  iframes: false,
+  iframesTimeout: 5000,
+  shadowDOM: false,
+  highlight: undefined,
+  highlightName: 'advanced-markjs',
+  staticRanges: true,
+  rangeAcrossElements: true,
+  combineBy: 100,
+  debug: false,
+  done(totalMarks, totalMatches, termStats) {
+    console.log(totalMarks, totalMatches, termStats);
+  },
+  each(elementOrRange, info) {
+    if (info.abort) return;
+    console.log(elementOrRange, info.match);
+  },
+  filter(nodeOrArray, term, totalMatchesSoFar, termMatchesSoFar, filterInfo) {
+    return totalMatchesSoFar < 100; // limit to first 100 matches
+  },
+  noMatch(terms) {
+    console.warn('No match for:', terms);
+  },
+};
+
+new Mark(document.querySelector('article')).mark('lorem ipsum', options);
+```
+
+### `Mark.RegExpOptions`
+
+Options for the `markRegExp()` method.
+
+```ts
+import Mark from 'advanced-mark.js';
+
+const options: Mark.RegExpOptions = {
+  element: 'mark',
+  className: 'regexp-match',
+  ignoreGroups: 0,
+  separateGroups: false,   // requires /gd flag when true
+  wrapAllRanges: false,
+  acrossElements: false,
+  iframes: false,
+  highlight: undefined,
+  staticRanges: true,
+  done(totalMarks, totalMatches) {},
+  each(elementOrRange, info) {},
+  filter(nodeOrArray, regexp, matchesSoFar, filterInfo) {
+    return true;
+  },
+  noMatch(regexp) {},
+};
+
+new Mark(document.querySelector('article'))
+  .markRegExp(/lor[ea]m/gi, options);
+```
+
+### `Mark.RangesOptions`
+
+Options for the `markRanges()` method.
+
+```ts
+import Mark from 'advanced-mark.js';
+
+const options: Mark.RangesOptions = {
+  element: 'mark',
+  className: 'range-match',
+  wrapAllRanges: false,
+  markLines: false,
+  iframes: false,
+  highlight: undefined,
+  staticRanges: true,
+  done(totalMarks, totalRanges) {},
+  each(elementOrRange, range, info) {},
+  filter(nodeOrArray, range, matchingString, currentIndex) {
+    return true;
+  },
+  noMatch(range) {},
+};
+
+const ranges: Mark.MarkRange[] = [
+  { start: 0, length: 5 },
+  { start: 10, length: 8 },
+];
+
+new Mark(document.querySelector('article'))
+  .markRanges(ranges, options);
+```
+
+### `Mark.UnmarkOptions`
+
+Options for the `unmark()` method.
+
+```ts
+import Mark from 'advanced-mark.js';
+
+const options: Mark.UnmarkOptions = {
+  element: 'mark',
+  className: '',
+  exclude: [],
+  iframes: false,
+  iframesTimeout: 5000,
+  shadowDOM: false,
+  highlight: undefined,
+  highlightName: ['advanced-markjs', 'secondary-highlight'], // one or many
+  done() {
+    console.log('Marks removed');
+  },
+  debug: false,
+};
+
+new Mark(document.querySelector('article')).unmark(options);
+```
+
+---
+
+## Auxiliary interfaces
+
+### `Mark.MarkRange`
+
+Represents a character-offset range passed to `markRanges()`.
+
+```ts
+interface MarkRange {
+  start: number;   // character offset from the start of the text content
+  length: number;  // number of characters to mark
+}
+```
+
+### `Mark.AccuracyObject`
+
+Pass instead of the `accuracy` string to supply custom word boundary characters.
+
+```ts
+interface AccuracyObject {
+  value: 'exactly' | 'startsWith' | 'complementary';
+  limiters: string | string[];  // custom boundary characters
+}
+
+// Example
+const options: Mark.MarkOptions = {
+  accuracy: { value: 'exactly', limiters: [',', '.', '!', '?'] },
+};
+```
+
+### `Mark.BoundaryObject`
+
+Passed as the `blockElementsBoundary` option to fine-tune which elements act as boundaries for `acrossElements` matching.
+
+```ts
+interface BoundaryObject {
+  tags?: string[];     // tag names treated as boundaries
+  extend?: boolean;    // true = extend built-in list; false = replace it
+  char?: string;       // character inserted at boundaries (default: ' ')
+}
+
+// Example
+const options: Mark.MarkOptions = {
+  acrossElements: true,
+  blockElementsBoundary: {
+    tags: ['section', 'article'],
+    extend: true,
+    char: ' ',
+  },
+};
+```
+
+### Info objects
+
+Callbacks receive typed info objects that expose match metadata and an `abort` flag:
+
+```ts
+interface MarkFilterInfo {
+  match: RegExpExecArray;   // the raw RegExp match
+  matchStart?: boolean;     // true when this is the first node of a cross-element match
+  count: number;            // matches encountered so far for this term
+  abort: boolean;           // set to true to halt processing immediately
+}
+
+interface MarkEachInfo {
+  match: RegExpExecArray;
+  matchStart?: boolean;
+  count: number;
+  abort: boolean;
+}
+
+interface RegExpFilterInfo {
+  match: RegExpExecArray;
+  matchStart?: boolean;
+  count: number;
+  groupIndex?: number;
+  abort: boolean;
+}
+
+interface RegExpEachInfo {
+  match: RegExpExecArray;
+  matchStart?: boolean;
+  count: number;
+  groupIndex?: number;
+  groupStart?: boolean;
+  abort: boolean;
+}
+
+// TermStats maps each search term to its match count
+interface TermStats {
+  [term: string]: number;
+}
+```

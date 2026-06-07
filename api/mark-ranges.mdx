@@ -1,0 +1,270 @@
+---
+title: "markRanges() — Highlight Text by Character Range"
+sidebarTitle: "markRanges()"
+description: "Highlight text in the DOM by specifying character offset and length ranges, ideal for backend search results, index-based highlighting, and line ranges."
+---
+
+`markRanges()` highlights text by specifying character start positions and lengths within the context's text content. It is especially useful for highlighting search results from a backend or full-text index, where you already know the exact byte or character offsets of matches. It also supports a line-range mode via the `markLines` option for highlighting entire lines by number.
+
+## Syntax
+
+```js
+// Vanilla JS
+const instance = new Mark(context);
+const ranges = [{ start: 2, length: 5 }, { start: 10, length: 7 }];
+instance.markRanges(ranges[, options]);
+
+// jQuery
+$(selector).markRanges(ranges[, options]);
+```
+
+## Parameters
+
+<ParamField path="ranges" type="object[]" required>
+  An array of range objects, each with:
+  - `start` (number) — zero-based character offset into the context's concatenated text content where the highlight begins. When `markLines` is `true`, this becomes a **one-based** line number instead.
+  - `length` (number) — number of characters to highlight. When `markLines` is `true`, this is the number of lines to highlight starting from `start`.
+
+  ```js
+  // Text ranges (0-based start)
+  const ranges = [
+    { start: 0,  length: 5 },
+    { start: 10, length: 3 },
+  ];
+
+  // Line ranges (1-based start, requires markLines: true)
+  const lineRanges = [
+    { start: 1, length: 2 }, // lines 1–2
+    { start: 5, length: 1 }, // line 5
+  ];
+  ```
+
+  <Note>
+    Start positions are counted across the full text content of the context, including whitespace. Ranges that are out of bounds or cover only whitespace are reported via the `noMatch` callback.
+  </Note>
+</ParamField>
+
+<ParamField path="options" type="object">
+  Optional configuration object.
+
+  <Expandable title="options properties">
+
+  <ParamField path="element" type="string" default="'mark'">
+    The HTML element to wrap highlighted ranges in. For example, `'span'` wraps in `<span>` tags instead of `<mark>`.
+  </ParamField>
+
+  <ParamField path="className" type="string" default="''">
+    A CSS class name added to every generated mark element.
+  </ParamField>
+
+  <ParamField path="exclude" type="string | string[]" default="[]">
+    A CSS selector string or array of selectors for DOM elements that should be excluded from the marking operation. Descendants of excluded elements are also skipped.
+  </ParamField>
+
+  <ParamField path="wrapAllRanges" type="boolean" default="undefined">
+    When `true`, allows nesting or overlapping ranges to all be marked. Without this option, overlapping ranges may be skipped or only partially marked.
+  </ParamField>
+
+  <ParamField path="markLines" type="boolean" default="undefined">
+    When `true`, switches to **line-range mode**: the `start` property of each range object is interpreted as a one-based line number, and `length` is the number of consecutive lines to highlight. Useful for highlighting specific lines in a code block or pre-formatted text.
+  </ParamField>
+
+  <ParamField path="highlight" type="Highlight" default="undefined">
+    A browser [Highlight](https://developer.mozilla.org/en-US/docs/Web/API/Highlight) object. When provided, the library uses the **CSS Custom Highlight API** instead of wrapping ranges in DOM elements.
+  </ParamField>
+
+  <ParamField path="highlightName" type="string" default="'advanced-markjs'">
+    The key used to register the `Highlight` object in the `CSS.highlights` registry. Only relevant when `highlight` is provided.
+  </ParamField>
+
+  <ParamField path="staticRanges" type="boolean" default="true">
+    When using the CSS Custom Highlight API, determines whether lightweight `StaticRange` objects or live `Range` objects are created for each match.
+  </ParamField>
+
+  <ParamField path="rangeAcrossElements" type="boolean" default="true">
+    When using the Highlight API, controls whether a single range spanning element boundaries is created (`true`) or separate per-node ranges are created (`false`).
+  </ParamField>
+
+  <ParamField path="shadowDOM" type="boolean | object" default="undefined">
+    When `true` or an options object, marks inside shadow DOM roots attached to elements within the context. Pass an object with a `style` property to inject CSS into shadow roots.
+  </ParamField>
+
+  <ParamField path="iframes" type="boolean | object" default="false">
+    When `true` or an options object, marks inside same-origin `<iframe>` elements within the context.
+  </ParamField>
+
+  <ParamField path="iframesTimeout" type="number" default="5000">
+    Maximum time in milliseconds to wait for an iframe to load before skipping it.
+  </ParamField>
+
+  <ParamField path="debug" type="boolean" default="false">
+    When `true`, logs debug messages to the object specified by `log`.
+  </ParamField>
+
+  <ParamField path="log" type="object" default="window.console">
+    The object used for debug logging. Must expose `warn` and `log` methods.
+  </ParamField>
+
+  <ParamField path="filter" type="function">
+    A callback invoked for each range (or for each text node the range spans, if the range crosses element boundaries — FR).
+
+    ```js
+    filter: (nodeOrArray, range, matchString, index) => {
+      return true; // true = highlight, false = skip
+    }
+    ```
+
+    Parameters:
+    - `nodeOrArray` (Text | Text[]) — the text node that contains the range or is part of it. An array of nodes when the Highlight API is used with `rangeAcrossElements`.
+    - `range` (object) — the current `{ start, length }` range object from your input array.
+    - `matchString` (string) — the text content matched by this range.
+    - `index` (number) — the zero-based index of the current range in the input array. Note: not fully reliable if a range is skipped due to whitespace-only content.
+
+    The function **must** return `true` to highlight or `false` to skip.
+  </ParamField>
+
+  <ParamField path="each" type="function">
+    A callback invoked after each mark element is created or range is registered. If a range spans multiple elements, it is called once per created element.
+
+    ```js
+    each: (elementOrRange, range, rangeInfo) => {}
+    ```
+
+    Parameters:
+    - `elementOrRange` (HTMLElement | StaticRange | Range) — the created mark element or Highlight API range object.
+    - `range` (object) — the `{ start, length }` range object that produced this element.
+    - `rangeInfo` (object):
+      - `matchStart` (boolean) — `true` on the first element created for this range (useful when a range spans multiple elements).
+      - `count` (number) — the total number of ranges highlighted so far.
+  </ParamField>
+
+  <ParamField path="done" type="function">
+    A callback invoked once after all ranges have been processed.
+
+    ```js
+    done: (total, totalRanges) => {}
+    ```
+
+    Parameters:
+    - `total` (number) — total number of HTML elements created or ranges registered.
+    - `totalRanges` (number) — total number of ranges that were successfully highlighted.
+  </ParamField>
+
+  <ParamField path="noMatch" type="function">
+    A callback invoked for each range that could not be highlighted — for example because the range is out of bounds, has invalid values, or covers only whitespace.
+
+    ```js
+    noMatch: (range) => {}
+    ```
+
+    Parameters:
+    - `range` (object) — the `{ start, length }` range object that failed to match.
+  </ParamField>
+
+  </Expandable>
+</ParamField>
+
+## Default Options
+
+```js
+const options = {
+  element: 'mark',
+  className: '',
+  exclude: [],
+
+  staticRanges: true,        // Highlight API only
+  rangeAcrossElements: true, // Highlight API only
+  shadowDOM: false,
+  iframes: false,
+  iframesTimeout: 5000,
+
+  filter: (nodeOrArray, range, matchingString, index) => {
+    return true; // must return either true or false
+  },
+  each: (elementOrRange, range, rangeInfo) => {},
+  done: (total, totalMatches) => {},
+  noMatch: (range) => {},
+  debug: false,
+  log: window.console,
+};
+```
+
+## Usage Examples
+
+<CodeGroup>
+
+```js Basic ranges
+const instance = new Mark(document.querySelector('.content'));
+
+const ranges = [
+  { start: 0,  length: 5 },
+  { start: 10, length: 7 },
+];
+
+instance.markRanges(ranges, {
+  done: (total, totalRanges) => {
+    console.log(`Highlighted ${totalRanges} ranges with ${total} elements.`);
+  },
+  noMatch: (range) => {
+    console.warn('Range did not match:', range);
+  },
+});
+```
+
+```js markLines with scrollIntoView
+const instance = new Mark(document.querySelector('pre code'));
+
+// Highlight lines 3 through 5 in a code block
+instance.markRanges([{ start: 3, length: 3 }], {
+  markLines: true,
+  className: 'highlighted-line',
+  each: (element, range, rangeInfo) => {
+    // Scroll the first element of the range into view
+    if (rangeInfo.matchStart) {
+      element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+  },
+});
+```
+
+```js Filter ranges by content
+const instance = new Mark(document.querySelector('.content'));
+
+const ranges = [
+  { start: 0,  length: 10 },
+  { start: 20, length: 5  },
+];
+
+instance.markRanges(ranges, {
+  filter: (node, range, matchString, index) => {
+    // Only highlight ranges that contain actual words
+    return /\w/.test(matchString);
+  },
+  done: (total, totalRanges) => {
+    console.log(`${totalRanges} ranges highlighted.`);
+  },
+});
+```
+
+```js wrapAllRanges for overlapping ranges
+const instance = new Mark(document.querySelector('.content'));
+
+// Overlapping ranges are all marked when wrapAllRanges is true
+instance.markRanges(
+  [
+    { start: 0,  length: 10 },
+    { start: 5,  length: 8  }, // overlaps the first range
+  ],
+  { wrapAllRanges: true }
+);
+```
+
+</CodeGroup>
+
+<Note>
+  Character positions in `start` include all whitespace characters (spaces, newlines, tabs). When computing offsets from backend results, make sure your indexing matches the browser's `textContent` representation of the context element.
+</Note>
+
+<Tip>
+  Use the `markLines` option together with a `<pre>` or `<code>` element to highlight entire lines of code by line number without needing to compute character offsets yourself.
+</Tip>

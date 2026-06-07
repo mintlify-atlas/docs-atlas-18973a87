@@ -1,0 +1,123 @@
+---
+title: "Controlling Element Boundaries for Cross-Element Matching"
+sidebarTitle: "Element Boundaries"
+description: "Use blockElementsBoundary to prevent cross-element matches from spanning block-level HTML elements, with support for custom tags and boundary characters."
+---
+
+When `acrossElements: true` is enabled, advanced-mark.js concatenates all text node contents inside the search context into a single virtual string before running the search. This makes it possible to find phrases and regex matches that straddle inline element boundaries — but it also means a match could span across semantically unrelated block-level elements (for example, matching text from the end of one paragraph and the beginning of the next).
+
+The `blockElementsBoundary` option solves this by inserting a special separator character at block element boundaries in the aggregated string. Any search term or regex that would have to cross a boundary character will fail to match, keeping results contained within their respective blocks.
+
+<Note>
+`blockElementsBoundary` only has an effect when `acrossElements: true` is also set. It is silently ignored for single-node searches. It is most useful for multi-word phrase searches (`separateWordSearch: false`), regex patterns, and wildcard searches with `wildcards: 'withSpaces'`.
+</Note>
+
+## How boundaries work
+
+When a block element separates two text nodes, advanced-mark.js inserts a `\x01` character (with surrounding spaces where appropriate) between them in the aggregated string. For example:
+
+```
+<h1>Header</h1><p>Paragraph</p>
+```
+
+becomes the virtual string:
+
+```
+Header \x01 Paragraph
+```
+
+A search for `"Header Paragraph"` will not match because the `\x01` separator sits between the two words. A search for `"Header"` or `"Paragraph"` alone will match normally.
+
+## blockElementsBoundary: true
+
+Setting the option to `true` activates boundaries for all **default block elements**. The complete list of default boundary elements is:
+
+> `address`, `area`, `article`, `aside`, `audio`, `blockquote`, `body`, `br`, `button`, `canvas`, `dd`, `details`, `div`, `dl`, `dt`, `fieldset`, `figcaption`, `figure`, `footer`, `form`, `h1`, `h2`, `h3`, `h4`, `h5`, `h6`, `header`, `hr`, `iframe`, `img`, `input`, `label`, `li`, `main`, `map`, `menu`, `menuitem`, `meter`, `nav`, `object`, `ol`, `output`, `p`, `picture`, `pre`, `section`, `select`, `svg`, `table`, `tbody`, `td`, `textarea`, `tfoot`, `th`, `thead`, `tr`, `track`, `ul`, `video`
+
+```js
+instance.mark('lorem ipsum dolor', {
+  separateWordSearch: false,
+  acrossElements: true,
+  blockElementsBoundary: true
+});
+```
+
+## Configuration variants
+
+<CodeGroup>
+
+```js Custom boundary elements only
+// Only the listed elements act as boundaries;
+// all other block elements are treated as transparent
+instance.mark('lorem ipsum dolor', {
+  separateWordSearch: false,
+  acrossElements: true,
+  blockElementsBoundary: {
+    tagNames: ['div', 'p', 'h1', 'h2']
+  }
+});
+```
+
+```js Extend defaults with custom elements
+// Adds custom/web-component tags on top of the default block element list
+instance.markRegExp(/.../gi, {
+  acrossElements: true,
+  blockElementsBoundary: {
+    tagNames: ['tab-container', 'custom-tag'],
+    extend: true
+  }
+});
+```
+
+```js Custom boundary character
+// Use '.' as the separator instead of the default \x01
+instance.mark('lorem ipsum dolor', {
+  separateWordSearch: false,
+  acrossElements: true,
+  blockElementsBoundary: {
+    char: '.'
+  }
+});
+```
+
+```js Combined options
+// Custom elements only, with a custom boundary char
+instance.mark('lorem ipsum dolor', {
+  separateWordSearch: false,
+  acrossElements: true,
+  blockElementsBoundary: {
+    tagNames: ['div', 'p', 'h1', 'h2'],
+    char: '.'
+  }
+});
+```
+
+</CodeGroup>
+
+## Boundary object reference
+
+When passing an object to `blockElementsBoundary`, the following properties are available:
+
+| Property | Type | Default | Description |
+|---|---|---|---|
+| `tagNames` | `string[]` | `undefined` | Array of custom HTML tag names to treat as boundaries. If `extend` is `false` (the default), **only** these tags are boundaries; the built-in list is ignored. |
+| `extend` | `boolean` | `false` | When `true`, the tags in `tagNames` are **added to** the default boundary list instead of replacing it. |
+| `char` | `string` | `\x01` | The separator character inserted at each boundary in the aggregated string. Change this only if `\x01` could appear legitimately in your content. |
+
+## Custom boundary character
+
+The default boundary character `\x01` (ASCII Start of Heading) is chosen because it virtually never appears in real web content. If your content does contain this character, specify an alternative:
+
+```js
+instance.mark('search term', {
+  separateWordSearch: false,
+  acrossElements: true,
+  blockElementsBoundary: {
+    char: '\x02'   // ASCII Start of Text — equally rare in practice
+  }
+});
+```
+
+<Note>
+The custom boundary character is only used internally in the aggregated string. It is never written into the DOM and does not appear in highlighted elements or their text content.
+</Note>
