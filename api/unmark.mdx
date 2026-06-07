@@ -1,7 +1,7 @@
 ---
 title: "unmark() — Remove Highlights from the DOM"
 sidebarTitle: "unmark()"
-description: "Remove all highlighted mark elements created by advanced-mark.js, normalize text nodes, or clear CSS Custom Highlight API ranges from the HighlightRegistry."
+description: "Remove highlighted mark elements created by advanced-mark.js, normalize text nodes, or clear CSS Custom Highlight API ranges from the HighlightRegistry."
 ---
 
 `unmark()` removes all mark elements created by advanced-mark.js and normalizes text nodes back to their original state. When using the **CSS Custom Highlight API**, it removes the registered `StaticRange`/`Range` objects from the `HighlightRegistry` instead of modifying the DOM. Use `unmark()` before calling `mark()` again to avoid stacking highlights on top of previous ones.

@@ -1,7 +1,7 @@
 ---
-title: "Get Started with advanced-mark.js in Minutes"
+title: "Quickstart Guide for advanced-mark.js Highlighting"
 sidebarTitle: "Quickstart"
-description: "Install advanced-mark.js, create your first Mark instance, highlight text in the DOM, and style your results in just a few steps."
+description: "Install advanced-mark.js, create your first Mark instance, highlight text in the DOM, and style your results with CSS in just a few steps."
 ---
 
 This page walks you through everything you need to go from zero to your first working text highlight: installing the package, importing it into your project, initialising a `Mark` instance, calling `mark()`, and styling the results. By the end you'll have a solid foundation for exploring the full API.
@@ -110,7 +110,7 @@ This page walks you through everything you need to go from zero to your first wo
 
     instance.mark('lorem ipsum', {
       separateWordSearch: true,
-      done: (count) => console.log(`Marked ${count} matches`),
+      done: (totalMarks) => console.log(`Marked ${totalMarks} elements`),
     });
     ```
 
@@ -187,7 +187,7 @@ const instance = new Mark(document.querySelector('article'));
 instance.mark('lorem ipsum', {
   separateWordSearch: true,
   caseSensitive: false,
-  done: (count) => console.log(`Marked ${count} matches`),
+  done: (totalMarks) => console.log(`Marked ${totalMarks} elements`),
 });
 ```
 
@@ -198,7 +198,7 @@ mark {
 }
 ```
 
-The `separateWordSearch: true` option splits the string `'lorem ipsum'` into individual words and highlights each one independently. The `done` callback receives the total number of mark elements created.
+The `separateWordSearch: true` option splits the string `'lorem ipsum'` into individual words and highlights each one independently. The `done` callback receives three arguments: `totalMarks` (number of mark elements created), `totalMatches` (number of text matches found), and `termStats` (a per-term match count object).
 
 ---
 

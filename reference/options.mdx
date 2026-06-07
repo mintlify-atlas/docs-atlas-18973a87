@@ -208,8 +208,8 @@ These options apply only to the `mark()` method.
   | Value | Behavior |
   |---|---|
   | `'disabled'` | No wildcard processing; `*` and `?` are treated literally. |
-  | `'enabled'` | `*` matches zero or more non-whitespace characters; `?` matches exactly one non-whitespace character. |
-  | `'withSpaces'` | Same as `'enabled'` but `*` also matches whitespace. |
+  | `'enabled'` | `?` matches zero or one non-whitespace character; `*` matches zero or more non-whitespace characters. |
+  | `'withSpaces'` | `?` matches zero or one character (including whitespace); `*` matches zero or more characters including whitespace, lazily (as few as possible). |
 </ParamField>
 
 <ParamField body="acrossElements" type="boolean" default="false">

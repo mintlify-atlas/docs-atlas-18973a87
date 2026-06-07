@@ -1,7 +1,7 @@
 ---
 title: "Performance and Optimization with advanced-mark.js"
 sidebarTitle: "Performance"
-description: "Learn how advanced-mark.js achieves fast highlighting and how to optimize for large documents using the CSS Highlight API, combineBy, and other techniques."
+description: "Learn how advanced-mark.js achieves fast highlighting and how to optimize large documents using the CSS Highlight API, combineBy, and other techniques."
 ---
 
 advanced-mark.js delivers significantly faster performance than mark.js v8.11.1, particularly when using `acrossElements` mode or processing large documents. The improvements come from a fundamentally different internal architecture: text nodes are aggregated into a single string before matching, avoiding repeated DOM traversal per search term, and the CSS Custom Highlight API path eliminates DOM mutations entirely.
@@ -68,11 +68,11 @@ new Mark(ctx).mark(searchTerms, {
 
 ## combineBy option
 
-The `combineBy` option (formerly `combinePatterns`) controls how many individual terms from a search array are combined into a single regular expression pattern per run. The default is `10`, meaning an array of 50 terms produces 5 combined patterns and 5 matching passes:
+The `combineBy` option (formerly `combinePatterns`) controls how many individual terms from a search array are combined into a single regular expression pattern per run. The default is `100`, meaning an array of 500 terms produces 5 combined patterns and 5 matching passes:
 
 ```js
 instance.mark(['str1', 'str2', /* ... */], {
-  combineBy: 10 // default
+  combineBy: 100 // default
 });
 ```
 

@@ -1,7 +1,7 @@
 ---
 title: "Using the CSS Custom Highlight API with advanced-mark.js"
 sidebarTitle: "CSS Highlight API"
-description: "Use the highlight option to leverage the native browser CSS Custom Highlight API, styling text ranges without DOM wrapping for significantly faster highlighting."
+description: "Use the highlight option to leverage the browser CSS Custom Highlight API, styling text ranges without DOM wrapping for significantly faster highlighting."
 ---
 
 The [CSS Custom Highlight API](https://developer.mozilla.org/en-US/docs/Web/API/CSS_Custom_Highlight_API) allows browsers to style arbitrary text ranges without inserting any new DOM elements. advanced-mark.js supports this API natively: instead of wrapping matched text in `<mark>` elements, it registers `StaticRange` or `Range` objects with the browser's highlight registry, leaving the DOM completely untouched. This is significantly faster for large documents because it eliminates DOM mutations and the reflow they trigger.

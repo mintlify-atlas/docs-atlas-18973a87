@@ -93,7 +93,7 @@ const options: Mark.MarkOptions = {
   highlightName: 'advanced-markjs',
   staticRanges: true,
   rangeAcrossElements: true,
-  combineBy: 100,
+  combineby: 100, // note: the shipped .d.ts uses lowercase 'b'; the runtime also accepts 'combineBy'
   debug: false,
   done(totalMarks, totalMatches, termStats) {
     console.log(totalMarks, totalMatches, termStats);
@@ -291,5 +291,11 @@ interface RegExpEachInfo {
 // TermStats maps each search term to its match count
 interface TermStats {
   [term: string]: number;
+}
+
+// Passed as the third argument of the each() callback in markRanges()
+interface RangeEachInfo {
+  matchStart?: boolean;
+  count: number;
 }
 ```

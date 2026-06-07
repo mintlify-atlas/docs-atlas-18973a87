@@ -1,7 +1,7 @@
 ---
-title: "Nesting and Overlapping Ranges and Match Groups"
+title: "Nesting and Overlapping Ranges with advanced-mark.js"
 sidebarTitle: "Nesting & Overlapping"
-description: "Enable wrapAllRanges to mark nested or overlapping ranges with markRanges() and overlapping RegExp capturing groups with markRegExp(), including groups inside lookarounds."
+description: "Use wrapAllRanges to highlight nested or overlapping ranges with markRanges() and capturing groups inside lookaround assertions with markRegExp()."
 ---
 
 By default, if one highlighted range (or capturing group) overlaps with or is nested inside another, the inner range is skipped. The `wrapAllRanges: true` option removes this restriction — all ranges and groups are wrapped independently, regardless of nesting depth or overlap.
@@ -26,7 +26,7 @@ const ranges = [
 
 instance.markRanges(ranges, {
   wrapAllRanges: true,
-  each: (markElement, range) => {
+  each: (markElement, range, rangeInfo) => {
     // The range object you supplied is passed back here
     if (range.nested) {
       markElement.className = 'nested';
